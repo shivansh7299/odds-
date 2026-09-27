@@ -8,10 +8,17 @@
  *   p.setReference("Garmin", bpm, tSeconds);           // optional watch HR for agreement
  *   const r = p.compute(tNow);                         // ~2x per second
  *   r.hr, r.status ("good"|"fair"|"poor"|"nofinger"|"warming"), r.score, r.components, r.reasons
+ *
+ * Face mode (front camera, no contact): turn skin colour into a pulse signal with POS, then reuse the same processor.
+ *   const pos = new POS(), p = new PPGProcessor(FACE_CONFIG);
+ *   const h = pos.push(t, r, g, b);                    // every frame: mean RGB of forehead + cheek skin
+ *   if (h != null) p.pushPPG(t, 1 - h, { clip, finger: facePresent, note });
+ *   p.pushMotion(t, headMotion);                       // % of face width moved per frame
  */
 
 // Every threshold in one place so the team can tune on real phones.
 export const CONFIG = {
+  mode: "finger",       // "finger" (fingertip over rear camera) or "face" (front camera, see FACE_CONFIG)
   fs: 30,               // resample rate (Hz)
   window: 8,            // analysis window (s)
   bandLow: 0.7,         // Hz  (42 bpm)
@@ -24,8 +31,73 @@ export const CONFIG = {
   piGood: 0.25,         // perfusion index % where the score reaches 1
   clipBad: 0.35,        // fraction of saturated red pixels that means "pressing too hard / too bright"
   minFps: 15,
+  hrMinClarity: 0,      // pulse clarity needed before any heart rate is shown (face mode raises it)
+  hrv: true,            // report RMSSD from good windows
   weights: { template: 0.3, clarity: 0.2, rhythm: 0.2, perfusion: 0.1, motion: 0.2 },
 };
+
+// Face (remote PPG) overrides. The pulse in facial skin is ~10x weaker than at a lit fingertip, so the
+// "pulse strength" scale is lower, and stillness is measured from head movement in the image, not the phone.
+export const FACE_CONFIG = {
+  mode: "face",
+  motionOk: 0.6,        // % of face width moved per frame (RMS over 2 s): below this counts as still
+  motionBad: 3,         // above this the window is unusable (talking, turning, walking)
+  piLow: 0.03,          // relative pulse amplitude (%) where the score hits 0
+  piGood: 0.2,          // relative pulse amplitude (%) where the score reaches 1
+  clipBad: 0.2,         // fraction of blown-out skin pixels (glare, window behind a bright face)
+  posWindow: 1.6,       // s, POS projection window (about one beat at 40 bpm)
+  hrMinClarity: 0.5,    // the spectrum must clearly agree with the beat rhythm before a face heart rate is shown
+  hrv: false,           // beat timing from 30 fps face video is too jittery for RMSSD (it reads 2-3x too high)
+};
+
+// What the processor says, per mode.
+const TEXT = {
+  finger: {
+    source: "fingertip camera PPG",
+    absent: "Cover the camera and flash fully with your fingertip",
+    motion: "Motion detected: hold your hand still",
+    saturated: "Too bright or pressing too hard: ease off the lens",
+    weak: "Weak pulse: cold finger or light contact, cover the lens fully",
+  },
+  face: {
+    source: "face camera remote PPG (POS)",
+    absent: "Face not found: center your face in the oval",
+    motion: "Head movement detected: keep your head still and don't talk",
+    saturated: "Glare on your skin: turn away from direct light or a bright window",
+    weak: "Weak skin signal: move closer, face even light, avoid backlight",
+  },
+};
+
+/**
+ * POS (Plane-Orthogonal-to-Skin; Wang et al., IEEE TBME 2017), causal form for live video.
+ * Each frame's RGB is normalised by its mean over the last `win` seconds, projected onto two axes
+ * orthogonal to the skin tone, and the two projections are mixed so that intensity changes (lighting,
+ * small movements) cancel and the blood-volume pulse remains. Returns a value that rises at systole
+ * (more blood in the skin), or null while the window fills.
+ */
+export class POS {
+  constructor({ win = FACE_CONFIG.posWindow } = {}) { this.win = win; this.buf = []; }
+  push(t, r, g, b) {
+    if (!(r > 0 && g > 0 && b > 0)) return null;
+    const B = this.buf; B.push([t, r, g, b]);
+    while (B.length && B[0][0] < t - this.win) B.shift();
+    if (B.length < 10) return null;
+    let mr = 0, mg = 0, mb = 0;
+    for (const s of B) { mr += s[1]; mg += s[2]; mb += s[3]; }
+    mr /= B.length; mg /= B.length; mb /= B.length;
+    let a1 = 0, a2 = 0, q1 = 0, q2 = 0;
+    for (const s of B) {
+      const R = s[1] / mr, G = s[2] / mg, Bl = s[3] / mb;
+      const s1 = G - Bl, s2 = G + Bl - 2 * R;
+      a1 += s1; a2 += s2; q1 += s1 * s1; q2 += s2 * s2;
+    }
+    const n = B.length, sd1 = Math.sqrt(Math.max(0, q1 / n - (a1 / n) ** 2)), sd2 = Math.sqrt(Math.max(0, q2 / n - (a2 / n) ** 2));
+    const alpha = sd2 > 1e-9 ? sd1 / sd2 : 0;
+    const R = r / mr, G = g / mg, Bl = b / mb;
+    // blood absorbs green most, so S1 = G - B falls at systole: negate so the output rises with the pulse
+    return -((G - Bl) + alpha * (G + Bl - 2 * R));
+  }
+}
 
 // ---------------- signal helpers ----------------
 function biquad(type, f0, fs, Q = Math.SQRT1_2) {
@@ -85,18 +157,40 @@ function pearson(a, b) {
 
 /** Systolic peaks: local maxima above an adaptive threshold, at least minIBI apart, sub-sample refined. */
 /** Dominant beat period (samples) from autocorrelation; prefers the shortest lag near the maximum. */
-export function beatPeriod(x, fs = CONFIG.fs) {
+export function beatPeriod(x, fs = CONFIG.fs, rateGuard = false) {
   const lo = Math.floor(0.28 * fs), hi = Math.ceil(CONFIG.maxIBI * fs), n = x.length;
   const ac = [];
   for (let L = lo; L <= hi && L < n - 1; L++) { let s = 0; for (let i = 0; i + L < n; i++) s += x[i] * x[i + L]; ac.push([L, s / (n - L)]); }
   const peaks = ac.filter((v, i) => i > 0 && i < ac.length - 1 && v[1] > ac[i - 1][1] && v[1] >= ac[i + 1][1] && v[1] > 0);
   if (!peaks.length) return null;
   const best = Math.max(...peaks.map((p) => p[1]));
-  return peaks.find((p) => p[1] >= 0.85 * best)[0];
+  const L = peaks.find((p) => p[1] >= 0.85 * best)[0];
+  if (!rateGuard) return L;
+  // Half-rate guard: in a weak or noisy pulse (face video especially) autocorrelation can lock onto every
+  // other beat (or every third), which still looks perfectly regular. If the spectrum holds clearly more power
+  // at a multiple of the rate, the faster rhythm is the real one.
+  const f = fs / L, p1 = tonePower(x, f, fs);
+  let bestK = 1, bestP = 0;
+  for (const [k, need] of [[2, 1.5], [3, 2.5]]) {
+    if (Math.round(L / k) < lo || k * f > CONFIG.bandHigh) continue;
+    const pk = tonePower(x, k * f, fs);
+    if (pk > need * p1 && pk > bestP) { bestK = k; bestP = pk; }
+  }
+  return bestK > 1 ? Math.round(L / bestK) : L;
+}
+/** Power of x at frequency f (Hz), best of three nearby bins so a slightly off rate still counts. */
+function tonePower(x, f, fs) {
+  let best = 0;
+  for (const df of [-0.05, 0, 0.05]) {
+    let re = 0, im = 0;
+    for (let i = 0; i < x.length; i++) { const a = (2 * Math.PI * (f + df) * i) / fs; re += x[i] * Math.cos(a); im -= x[i] * Math.sin(a); }
+    best = Math.max(best, re * re + im * im);
+  }
+  return best;
 }
 
-export function findPeaks(x, fs = CONFIG.fs) {
-  const period = beatPeriod(x, fs);
+export function findPeaks(x, fs = CONFIG.fs, rateGuard = false) {
+  const period = beatPeriod(x, fs, rateGuard);
   const hi = pct(Array.from(x), 95), thr = 0.35 * hi;
   const minD = period ? Math.max(Math.round(0.28 * fs), Math.round(0.6 * period)) : Math.round(CONFIG.minIBI * fs);
   const cand = [];
@@ -115,6 +209,8 @@ export function findPeaks(x, fs = CONFIG.fs) {
 export class PPGProcessor {
   constructor(cfg = {}) {
     this.cfg = { ...CONFIG, ...cfg };
+    this.text = TEXT[this.cfg.mode] || TEXT.finger;
+    this.note = "";              // latest input hint (e.g. "Too dark"), shown when the source is absent
     this.ppg = { t: [], v: [], clip: [], finger: [] };
     this.motion = { t: [], v: [] };
     this.refs = {};              // name -> { bpm, t }
@@ -126,8 +222,9 @@ export class PPGProcessor {
     this.hrLog = [];
   }
 
-  pushPPG(t, v, { clip = 0, finger = true } = {}) {
+  pushPPG(t, v, { clip = 0, finger = true, note = "" } = {}) {
     const P = this.ppg;
+    this.note = finger ? "" : note;
     if (P.t.length && t <= P.t[P.t.length - 1]) return;
     P.t.push(t); P.v.push(v); P.clip.push(clip); P.finger.push(finger ? 1 : 0);
     this._trim(P, t, this.cfg.window + 4);
@@ -153,7 +250,7 @@ export class PPGProcessor {
     res.fps = recent / c.window;
     const fingerFrac = idx < 0 ? 0 : mean(P.finger.slice(idx));
     if (P.t.length && fingerFrac < 0.7) {
-      res.status = "nofinger"; res.reasons = ["Cover the camera and flash fully with your fingertip"];
+      res.status = "nofinger"; res.reasons = [this.note || this.text.absent];
       return this._finish(res, dt);
     }
     if (span < c.window * 0.75 || res.fps < c.minFps * 0.5) {
@@ -166,7 +263,7 @@ export class PPGProcessor {
     const x = filt.map((v) => -v);            // more blood absorbs more light: invert so systole points up
     const s = std(Array.from(x)) || 1;
     const xn = x.map((v) => v / s);
-    const peaks = findPeaks(xn, c.fs);
+    const peaks = findPeaks(xn, c.fs, c.mode === "face");
     res.signal = xn; res.peaks = peaks;
 
     const ibis = [];
@@ -253,12 +350,14 @@ export class PPGProcessor {
 
     const lowest = Math.min(...Object.values(comps).filter((v) => v != null));
     res.status = score >= 0.8 && lowest >= 0.5 ? "good" : score >= 0.6 && lowest >= 0.3 ? "fair" : "poor";
+    if (clarity < c.hrMinClarity) res.status = "poor";
 
     // human-readable reasons, worst first
     const why = [];
-    if (motion != null && motion < 0.6) why.push([motion, "Motion detected: hold your hand still"]);
-    if (saturated) why.push([0.1, "Too bright or pressing too hard: ease off the lens"]);
-    else if (perfusion < 0.6) why.push([perfusion, "Weak pulse: cold finger or light contact, cover the lens fully"]);
+    // face: head movement is almost always the root cause of the other failures, so name it first
+    if (motion != null && motion < 0.6) why.push([c.mode === "face" ? -1 : motion, this.text.motion]);
+    if (saturated) why.push([0.1, this.text.saturated]);
+    else if (perfusion < 0.6) why.push([perfusion, this.text.weak]);
     if (template < 0.7) why.push([template, "Beats don't match each other: noisy waveform"]);
     if (clarity < 0.6) why.push([clarity, "Pulse buried in noise: the rhythm isn't clear in the spectrum"]);
     if (rhythm < 0.6) why.push([rhythm, "Irregular or missed beats (noise, or a genuinely irregular rhythm)"]);
@@ -282,7 +381,7 @@ export class PPGProcessor {
     this.beats = this.beats.filter((t) => t > tNow - 90);
     const bb = this.beats.filter((t) => t > tNow - 60), ib = [];
     for (let i = 1; i < bb.length; i++) { const d = bb[i] - bb[i - 1]; if (d >= c.minIBI && d <= c.maxIBI) ib.push(d); }
-    if (ib.length >= 10) {
+    if (c.hrv && ib.length >= 10) {
       const sd = []; for (let i = 1; i < ib.length; i++) if (Math.abs(ib[i] - ib[i - 1]) < 0.25) sd.push((ib[i] - ib[i - 1]) ** 2);
       if (sd.length >= 8) res.rmssd = Math.sqrt(mean(sd)) * 1000;
     }
@@ -315,7 +414,7 @@ export class PPGProcessor {
     const hrs = this.hrLog.map((h) => h[1]);
     const r = this.last || {};
     return {
-      source: "fingertip camera PPG",
+      source: this.text.source,
       seconds_analyzed: Math.round(this.totalTime),
       percent_good_signal: this.totalTime ? Math.round((100 * this.goodTime) / this.totalTime) : 0,
       heart_rate_bpm: hrs.length ? { median: Math.round(median(hrs)), min: Math.round(Math.min(...hrs)), max: Math.round(Math.max(...hrs)) } : null,
