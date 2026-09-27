@@ -16,6 +16,22 @@ export type BleStatus =
 export type LiveReading = { ts: number; bpm: number };
 
 const WINDOW_MS = 5 * 60_000; // keep 5 minutes on screen
+/** Watches that may advertise only their name while broadcasting heart rate (Garmin families). */
+const HR_NAME_PREFIXES = [
+  "Forerunner",
+  "FR",
+  "Garmin",
+  "fenix",
+  "fēnix",
+  "epix",
+  "Venu",
+  "vivoactive",
+  "Instinct",
+  "Enduro",
+  "MARQ",
+  "Descent",
+  "Approach",
+];
 const UPLOAD_EVERY_MS = 10_000;
 const MAX_PENDING = 3_600; // ~1 h of readings if the server is unreachable
 const MAX_BATCH = 900;
@@ -150,9 +166,7 @@ export function useBleHeartRate() {
             : {
                 filters: [
                   { services: ["heart_rate"] },
-                  { namePrefix: "Forerunner" },
-                  { namePrefix: "Garmin" },
-                  { namePrefix: "FR" },
+                  ...HR_NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
                 ],
                 optionalServices: ["heart_rate"],
               },

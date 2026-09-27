@@ -3,6 +3,7 @@
 #   pnpm watch:build     compile connectiq/ for the Forerunner 265 -> connectiq/bin/vitalsync.prg
 #   pnpm watch:sim       build, open the Garmin simulator, and run the app in it
 #   pnpm watch:install   build and copy onto a USB-connected watch (needs: brew install libmtp)
+#   pnpm watch:package   build the .iq store package (Connect IQ Store beta, wireless install)
 set -euo pipefail
 
 CIQ="$HOME/Library/Application Support/Garmin/ConnectIQ"
@@ -44,14 +45,29 @@ install() {
   local apps
   apps=$(LANG=en_US.UTF-8 mtp-folders 2>/dev/null | awk -F'\t' '$2 ~ /^  Apps$/ {print $1; exit}')
   [ -n "$apps" ] || { echo "Watch not found. Plug it in, unlock it, and close Garmin Express."; exit 1; }
+  # Replace an earlier install instead of adding a second copy next to it.
+  local old
+  old=$(LANG=en_US.UTF-8 mtp-files 2>/dev/null | awk -v apps="$apps" '
+    /^File ID:/ {id=$3} /Filename:/ {name=$2} /Parent ID:/ {if ($3==apps && toupper(name)=="VITALSYNC.PRG") print id}')
+  for id in $old; do echo "Removing previous VITALSYNC.PRG ($id)..."; LANG=en_US.UTF-8 mtp-delfile -n "$id" >/dev/null 2>&1 || true; done
   echo "Copying to GARMIN/Apps (folder $apps)..."
   LANG=en_US.UTF-8 python3 "$ROOT/scripts/mtp-send.py" "$OUT" "$apps" VITALSYNC.PRG
   echo "Done. Unplug the watch; VitalSync appears in its apps list."
+}
+
+package() {
+  # Store package (.iq) for the Connect IQ Store, e.g. a private beta installed wirelessly
+  # from the Connect IQ app on the phone. Includes every product in manifest.xml.
+  local iq="$ROOT/connectiq/bin/vitalsync.iq"
+  mkdir -p "$(dirname "$iq")"
+  (cd "$ROOT/connectiq" && "$SDK/bin/monkeyc" -f monkey.jungle -e -r -o "$iq" -y "$KEY" -w)
+  echo "Built $iq"
 }
 
 case "${1:-build}" in
   build) build ;;
   sim) sim ;;
   install) install ;;
-  *) echo "usage: $0 [build|sim|install]"; exit 1 ;;
+  package) package ;;
+  *) echo "usage: $0 [build|sim|install|package]"; exit 1 ;;
 esac

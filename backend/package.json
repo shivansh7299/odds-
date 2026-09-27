@@ -25,7 +25,8 @@
     "start:all": "concurrently -k -n web,worker \"pnpm start\" \"pnpm worker\"",
     "watch:build": "bash scripts/watch.sh build",
     "watch:sim": "bash scripts/watch.sh sim",
-    "watch:install": "bash scripts/watch.sh install"
+    "watch:install": "bash scripts/watch.sh install",
+    "watch:package": "bash scripts/watch.sh package"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
