@@ -92,6 +92,23 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 .guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .guide .card h4{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:8px}
 .guide .card p{margin:0;font-size:13.5px;color:var(--muted);max-width:65ch}
+.readGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:20px}
+.nowList{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.nowList li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;font-size:14px;max-width:62ch}
+.nowList li i{width:10px;height:10px;border-radius:3px;margin-top:5px;background:var(--c,var(--accent))}
+.sigChips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.sigChips button{font:inherit;font-size:12.5px;font-family:"JetBrains Mono",ui-monospace,monospace;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.sigChips button i{width:9px;height:9px;border-radius:2px;background:var(--c)}
+.sigChips button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#sigInfo h3{margin:4px 0 6px;font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink)}
+#sigInfo p{margin:0 0 8px;font-size:14px;max-width:65ch}
+#sigInfo dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:13.5px}
+#sigInfo dt{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;padding-top:2px}
+#sigInfo dd{margin:0}
+#scope{cursor:pointer}
+@media (max-width:760px){.readGrid{grid-template-columns:1fr}}
+.museMap svg{width:100%;max-width:240px;height:auto;color:var(--muted);display:block;margin:6px auto}
+.guide .card h4 .sw+.sw{margin-left:-4px}
 .guide .meta{font-size:12px;margin-top:6px;color:var(--ink)}
 .try{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
 .try ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;max-width:75ch}
@@ -360,8 +377,8 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
             <path d="M134 90 C130 52 168 30 204 36 C232 42 240 66 232 84 C228 92 216 94 206 96 C192 112 166 120 150 114 C138 108 134 100 134 90 Z" fill="none" stroke="#51607E" stroke-width="1.2"/>
             <path d="M194 38 C190 58 196 72 188 88 M158 86 C176 83 196 85 212 92" fill="none" stroke="#51607E" stroke-width="1" stroke-linecap="round"/>
             <ellipse cx="152" cy="120" rx="15" ry="9" fill="#D9B8EC" stroke="#51607E" stroke-width="1"/>
-            <circle cx="203" cy="33" r="4.5" fill="#FFFFFF" stroke="#2F5FB8" stroke-width="2"/>
-            <circle cx="123" cy="100" r="4.5" fill="#FFFFFF" stroke="#6A43C9" stroke-width="2"/>
+            <circle cx="233" cy="66" r="4.5" fill="#FFFFFF" stroke="#F08A5D" stroke-width="2"/>
+            <circle cx="150" cy="114" r="4.5" fill="#FFFFFF" stroke="#6FA8F0" stroke-width="2"/>
           </g>
           <!-- eye -->
           <g class="org" data-o="eyes">
@@ -399,8 +416,8 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
             <text class="zl zl-brain" x="120" y="74">Occipital</text>
             <text class="zl zl-brain" x="166" y="106">Temporal</text>
             <text class="zl zl-brain" x="130" y="140" font-size="5.5">Cerebellum</text>
-            <text class="zl zl-brain" x="210" y="27" font-weight="600">Fz</text>
-            <text class="zl zl-brain" x="110" y="115" font-weight="600">Oz</text>
+            <text class="zl zl-brain" x="238" y="58" font-weight="600">AF7</text>
+            <text class="zl zl-brain" x="120" y="128" font-weight="600">TP9</text>
             <text class="zl zl-brain dev" x="222" y="56" font-size="5">Muse band</text>
           </g>
           <g font-size="3.4" stroke-width="1.3">
@@ -456,7 +473,7 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
     <div class="tile"><span class="lab"><span class="sw" style="background:#F2BE55"></span>Skin cond.</span><span class="val mono" id="rSCL">—</span></div>
     <div class="tile"><span class="lab"><span class="sw" style="background:#F2BE55"></span>SCRs · 60 s</span><span class="val mono" id="rSCR">—</span></div>
     <div class="tile"><span class="lab"><span class="sw" style="background:#FF9F6E"></span>Skin temp</span><span class="val mono" id="rTemp">—</span></div>
-    <div class="tile"><span class="lab"><span class="sw" style="background:#C3A6FF"></span>Oz alpha</span><span class="val mono" id="rAlpha">—</span></div>
+    <div class="tile"><span class="lab"><span class="sw" style="background:#6FA8F0"></span>Alpha · TP9/TP10</span><span class="val mono" id="rAlpha">—</span></div>
   </section>
 
   <div class="main">
@@ -494,7 +511,8 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
           <button class="btn" type="button" id="evBreath">Deep breath</button>
           <button class="btn" type="button" id="evJaw">Jaw clench</button>
           <button class="btn" type="button" id="evMove">Move head</button>
-          <button class="btn wide" type="button" id="evLoose" aria-pressed="false">Loose Oz electrode</button>
+          <button class="btn" type="button" id="evGaze">Look sideways</button>
+          <button class="btn wide" type="button" id="evLoose" aria-pressed="false">Loose TP9 contact (hair behind the ear)</button>
         </div>
       </div>
       <div class="card">
@@ -512,11 +530,25 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
     </aside>
   </div>
 
+  <section class="card readCard" id="readCard" aria-label="Reading the scope">
+    <div class="readGrid">
+      <div>
+        <h2>On screen now</h2>
+        <ul class="nowList" id="nowList" aria-live="polite"></ul>
+      </div>
+      <div>
+        <h2>About this trace</h2>
+        <div class="sigChips" id="sigChips" role="group" aria-label="Pick a trace"></div>
+        <div id="sigInfo"></div>
+      </div>
+    </div>
+  </section>
+
   <div class="lower">
     <section class="card">
       <div class="specHead">
         <h2>EEG power spectrum</h2>
-        <span class="seg" id="specSeg"><button type="button" data-c="0" aria-pressed="false">Fz</button><button type="button" data-c="1" aria-pressed="true">Oz</button></span>
+        <span class="seg" id="specSeg"><button type="button" data-c="0" aria-pressed="true">TP9</button><button type="button" data-c="1" aria-pressed="false">AF7</button><button type="button" data-c="2" aria-pressed="false">AF8</button><button type="button" data-c="3" aria-pressed="false">TP10</button></span>
       </div>
       <div class="wrap" id="specWrap"><canvas id="spec"></canvas></div>
       <div class="bands" id="bands"></div>
@@ -530,44 +562,32 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
   <section class="lessons">
     <h2>Channel guide</h2>
     <div class="guide">
-      <div class="card"><h4><span class="sw" style="background:#8DB6FF"></span>Fz · frontal EEG</h4><p>Scalp voltage over frontal midline cortex. Carries frontal theta during effortful attention, and is where eye blinks and eye movements dominate because the eye's cornea-positive dipole sits right in front of it.</p><div class="meta mono">~10–100 µV · 0.5–45 Hz</div></div>
-      <div class="card"><h4><span class="sw" style="background:#C3A6FF"></span>Oz · occipital EEG</h4><p>Over visual cortex. Posterior alpha (8–13 Hz) is largest here with eyes closed and drops when the eyes open or attention engages, the effect Hans Berger reported in 1929.</p><div class="meta mono">alpha peak ≈ 10 Hz</div></div>
+      <div class="card museMap">
+        <h4>Where a Muse headband listens</h4>
+        <svg viewBox="0 0 220 230" role="img" aria-labelledby="museMapT">
+          <title id="museMapT">Top view of the head with the Muse sensors AF7 and AF8 on the forehead, TP9 and TP10 behind the ears, and the reference Fpz at the centre of the forehead</title>
+          <path d="M100 24 L110 9 L120 24" fill="none" stroke="currentColor" stroke-width="2"/>
+          <ellipse cx="110" cy="122" rx="88" ry="98" fill="none" stroke="currentColor" stroke-width="2"/>
+          <ellipse cx="20" cy="124" rx="6" ry="17" fill="none" stroke="currentColor" stroke-width="2"/>
+          <ellipse cx="200" cy="124" rx="6" ry="17" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="M36 158 C24 138 26 112 40 92 C56 66 84 50 110 48 C136 50 164 66 180 92 C194 112 196 138 184 158" fill="none" stroke="currentColor" stroke-opacity=".55" stroke-width="7" stroke-linecap="round"/>
+          <circle cx="110" cy="40" r="5" fill="currentColor" fill-opacity=".6"/>
+          <text x="110" y="70" text-anchor="middle" font-size="11" fill="currentColor" font-family="JetBrains Mono,monospace">Fpz ref</text>
+          <circle cx="66" cy="62" r="9" fill="#F08A5D"/><text x="58" y="40" font-size="13" fill="currentColor" font-family="JetBrains Mono,monospace" font-weight="600">AF7</text>
+          <circle cx="154" cy="62" r="9" fill="#3CC895"/><text x="140" y="40" font-size="13" fill="currentColor" font-family="JetBrains Mono,monospace" font-weight="600">AF8</text>
+          <circle cx="36" cy="160" r="9" fill="#6FA8F0"/><text x="16" y="190" font-size="13" fill="currentColor" font-family="JetBrains Mono,monospace" font-weight="600">TP9</text>
+          <circle cx="184" cy="160" r="9" fill="#E8B53A"/><text x="164" y="190" font-size="13" fill="currentColor" font-family="JetBrains Mono,monospace" font-weight="600">TP10</text>
+          <text x="6" y="226" font-size="11" fill="currentColor" font-family="JetBrains Mono,monospace">left</text>
+          <text x="186" y="226" font-size="11" fill="currentColor" font-family="JetBrains Mono,monospace">right</text>
+        </svg>
+        <p>Seen from above, nose at the top. Every channel is the voltage between its sensor and the reference at Fpz.</p>
+      </div>
+      <div class="card"><h4><span class="sw" style="background:#F08A5D"></span><span class="sw" style="background:#3CC895"></span>AF7 · AF8 · forehead EEG</h4><p>Dry sensors on the forehead above the outer eyebrows, over the frontal lobes. They hear frontal theta during effort or drowsiness, but also every blink and eye movement, because the eye is a small battery right next to them. A blink moves both the same way; looking sideways moves them in opposite directions.</p><div class="meta mono">blinks 50–200 µV · theta 4–8 Hz</div></div>
+      <div class="card"><h4><span class="sw" style="background:#6FA8F0"></span><span class="sw" style="background:#E8B53A"></span>TP9 · TP10 · behind-the-ear EEG</h4><p>Rubber sensors behind the ears, over the temporal lobes. They show alpha (8–13 Hz) when the eyes close, and a lot of jaw-muscle noise because the temporalis muscle sits right there. They need skin contact: hair or glasses arms lift them.</p><div class="meta mono">alpha peak ≈ 10 Hz</div></div>
       <div class="card"><h4><span class="sw" style="background:#FF7A7A"></span>PPG · finger pleth</h4><p>Light absorption by blood in the fingertip. Each beat gives a systolic peak and a dicrotic notch. Peak-to-peak intervals give heart rate; pulse amplitude shrinks when sympathetic tone constricts finger vessels.</p><div class="meta mono">arbitrary units · peaks marked ●</div></div>
       <div class="card"><h4><span class="sw" style="background:#7FD6C2"></span>RESP · chest belt</h4><p>Chest expansion. Heart rate speeds up on inhalation and slows on exhalation: respiratory sinus arrhythmia, a vagal signature that is strongest at rest and with slow, deep breaths.</p><div class="meta mono">8–20 breaths/min at rest</div></div>
       <div class="card"><h4><span class="sw" style="background:#F2BE55"></span>EDA · skin conductance</h4><p>Eccrine sweat gland activity, driven only by sympathetic nerves. A slow tonic level (SCL) plus fast phasic responses (SCRs) that start 1–3 s after a stimulus, peak within a few seconds, and recover slowly.</p><div class="meta mono">SCL 2–20 µS · SCR ≥ 0.05 µS</div></div>
       <div class="card"><h4><span class="sw" style="background:#FF9F6E"></span>TEMP · skin temperature</h4><p>Peripheral skin temperature follows blood flow, so it falls slowly under sustained stress as vessels constrict. It changes over tens of seconds, which is why the scope autoscales to hundredths of a degree.</p><div class="meta mono">≈ 31–35 °C at the finger</div></div>
-    </div>
-    <div class="card try">
-      <div>
-        <h2 style="margin-bottom:10px">Exercises</h2>
-        <ol>
-          <li>Press <b>Open eyes</b>, then close them again. Watch the alpha peak near 10 Hz in the Oz spectrum collapse and recover. Compare the Fz spectrum.</li>
-          <li>Fire a <b>Startle</b>. Time the lag between the marker and the rise in skin conductance. Look for the smaller pleth pulses and the heart-rate jump.</li>
-          <li>Take a <b>Deep breath</b>. Watch the beat-to-beat spacing on the pleth tighten on the inhale and stretch on the exhale. Notice the SCR that follows with no emotional stimulus at all.</li>
-          <li>Turn on <b>Loose Oz electrode</b> and switch the notch filter off. Find the 60 Hz spike in the spectrum, then switch the notch back on.</li>
-          <li>Press <b>Jaw clench</b> with the 40 Hz low-pass off, then on. Which EEG band does muscle artifact contaminate most?</li>
-          <li>Switch the high-pass filter off and watch the baseline wander. Why do slow drifts matter for event-related analyses?</li>
-          <li>Run three <b>Mystery states</b> and name each from the traces alone.</li>
-        </ol>
-      </div>
-      <div class="head" aria-label="Electrode positions Fz and Oz on the 10-20 system">
-        <svg viewBox="0 0 220 240" role="img">
-          <title>10–20 positions of Fz and Oz</title>
-          <path d="M100 18 L110 4 L120 18" fill="none" stroke="currentColor" stroke-width="2"/>
-          <ellipse cx="110" cy="120" rx="92" ry="102" fill="none" stroke="currentColor" stroke-width="2"/>
-          <ellipse cx="16" cy="120" rx="6" ry="18" fill="none" stroke="currentColor" stroke-width="2"/>
-          <ellipse cx="204" cy="120" rx="6" ry="18" fill="none" stroke="currentColor" stroke-width="2"/>
-          <line x1="110" y1="18" x2="110" y2="222" stroke="currentColor" stroke-dasharray="3 4" stroke-width="1"/>
-          <line x1="18" y1="120" x2="202" y2="120" stroke="currentColor" stroke-dasharray="3 4" stroke-width="1"/>
-          <circle cx="110" cy="64" r="11" fill="#8DB6FF"/>
-          <text x="126" y="68" font-size="13" fill="currentColor" font-family="JetBrains Mono,monospace">Fz</text>
-          <circle cx="110" cy="202" r="11" fill="#C3A6FF"/>
-          <text x="126" y="206" font-size="13" fill="currentColor" font-family="JetBrains Mono,monospace">Oz</text>
-          <circle cx="110" cy="120" r="4" fill="currentColor"/>
-          <text x="118" y="114" font-size="11" fill="currentColor" font-family="JetBrains Mono,monospace">Cz</text>
-          <text x="88" y="236" font-size="11" fill="currentColor" font-family="JetBrains Mono,monospace">back</text>
-        </svg>
-      </div>
     </div>
     <p class="foot">All signals are generated in your browser from simple physiological models sampled at 250 Hz. Amplitudes and time courses are realistic for teaching; they are not recordings and not for clinical use.</p>
   </section>
@@ -799,28 +819,31 @@ function Biquad(type,f0,Q){ const w0=TAU*f0/FS, c=Math.cos(w0), al=Math.sin(w0)/
   const a0=1+al,a1=-2*c,a2=1-al; const B0=b0/a0,B1=b1/a0,B2=b2/a0,A1=a1/a0,A2=a2/a0; let x1=0,x2=0,y1=0,y2=0;
   return {process(x){const y=B0*x+B1*x1+B2*x2-A1*y1-A2*y2; x2=x1;x1=x;y2=y1;y1=y;return y;}, reset(){x1=x2=y1=y2=0;}}; }
 const filt={hp:true,lp:false,notch:true};
-const F=[0,1].map(()=>({hp:Biquad('hp',0.5,0.707),notch:Biquad('notch',60,20),lp1:Biquad('lp',40,0.707),lp2:Biquad('lp',40,0.707)}));
+const F=[0,1,2,3].map(()=>({hp:Biquad('hp',0.5,0.707),notch:Biquad('notch',60,20),lp1:Biquad('lp',40,0.707),lp2:Biquad('lp',40,0.707)}));
 function applyF(i,x){const f=F[i]; if(filt.hp)x=f.hp.process(x); if(filt.notch)x=f.notch.process(x); if(filt.lp){x=f.lp1.process(x);x=f.lp2.process(x);} return x;}
 
 /* ---------- channels ---------- */
 const CH=[
- {key:'fz',label:'Fz',color:'#8DB6FF',kind:'eeg'},
- {key:'oz',label:'Oz',color:'#C3A6FF',kind:'eeg'},
+ {key:'tp9',label:'TP9',color:'#6FA8F0',kind:'eeg'},    // Muse montage: behind the left ear
+ {key:'af7',label:'AF7',color:'#F08A5D',kind:'eeg'},    // forehead, left
+ {key:'af8',label:'AF8',color:'#3CC895',kind:'eeg'},    // forehead, right
+ {key:'tp10',label:'TP10',color:'#E8B53A',kind:'eeg'},  // behind the right ear
  {key:'ppg',label:'PPG',color:'#FF7A7A',kind:'auto',unit:'a.u.',minSpan:.3},
  {key:'resp',label:'RESP',color:'#7FD6C2',kind:'auto',unit:'a.u.',minSpan:.4},
  {key:'eda',label:'EDA',color:'#F2BE55',kind:'auto',unit:'µS',minSpan:.4,dec:2},
  {key:'temp',label:'TEMP',color:'#FF9F6E',kind:'auto',unit:'°C',minSpan:.15,dec:2},
 ];
 CH.forEach(c=>{c.buf=new Float32Array(BUF);c.on=true;c.lo=null;c.hi=null;});
+const IDX=Object.fromEntries(CH.map((c,i)=>[c.key,i]));
 
 /* ---------- presets ---------- */
 const PRESETS={
  relaxed:{name:'Relaxed, eyes closed',aO:12,aC:34,beta:5,theta:7,delta:10,hr:62,rr:11,arousal:.15,eyesClosed:true,
    note:'Posterior alpha rises, heart rate and breathing slow, few spontaneous SCRs, warm fingers.',
-   cue:'Large rhythmic ~10 Hz waves at Oz, no blinks (eyes shut), slow heart rate with clear breathing-linked variation, flat skin conductance.'},
+   cue:'Large rhythmic ~10 Hz waves on TP9/TP10, no blinks on AF7/AF8 (eyes shut), slow heart rate with clear breathing-linked variation, flat skin conductance.'},
  focused:{name:'Focused task, eyes open',aO:9,aC:26,beta:13,theta:9,delta:8,hr:76,rr:16,arousal:.5,eyesClosed:false,
    note:'Alpha blocks with eyes open, beta and frontal theta increase, moderate sympathetic activity.',
-   cue:'Small alpha, more fast beta activity, regular blinks at Fz, mid-range heart rate, occasional SCRs.'},
+   cue:'Small alpha, more fast beta activity, regular blinks on AF7/AF8, mid-range heart rate, occasional SCRs.'},
  drowsy:{name:'Drowsy',aO:10,aC:14,beta:4,theta:24,delta:16,hr:57,rr:9,arousal:.08,eyesClosed:false,
    note:'Alpha fades and slower theta takes over, breathing and heart rate slow, blinks become rare.',
    cue:'Slow 4–8 Hz theta dominates the spectrum, alpha is weak, blinks are rare, slowest heart rate and breathing.'},
@@ -830,16 +853,19 @@ const PRESETS={
 };
 const tg={alpha:34,beta:5,theta:7,delta:10,hr:62,rr:11,arousal:.15};
 const p={...tg};
-let presetKey='relaxed', eyesClosed=true, looseOz=false, mystery=null;
+let presetKey='relaxed', eyesClosed=true, looseTP9=false, mystery=null;
 
 /* ---------- generator state ---------- */
 let simT=0, sampCount=0, wIdx=0, running=true, acc=0;
 let phA=0,phB1=0,phB2=0,phT=0,phD=0;
 const jA=OU(0,2,.25), jB1=OU(0,1,2), jB2=OU(0,1,2), jT=OU(0,2,.5), jD=OU(0,2,.3);
 const eA=OU(.75,.5,.3), eB1=OU(.7,.25,.3), eB2=OU(.7,.25,.3), eT=OU(.7,.8,.3), eD=OU(.7,1,.3);
-const driftFz=OU(0,6,16), driftOz=OU(0,6,8);
-const pinkFz=makePink(), pinkOz=makePink();
-let blinks=[], emgUntil=-1, emgPrev=0, moveT0=-99;
+const EEG_N=4, TP9=0, AF7=1, AF8=2, TP10=3;            // Muse channels, referenced to Fpz (forehead centre)
+const drift=[OU(0,6,10),OU(0,6,16),OU(0,6,16),OU(0,6,10)];
+const pinkN=[0,1,2,3].map(()=>makePink());
+const phBx=[0,0,0,0], jBx=[OU(0,1,2),OU(0,1,2),OU(0,1,2),OU(0,1,2)], eBx=[0,1,2,3].map(()=>OU(.7,.25,.3)), eAx=[OU(.75,.5,.3),OU(.75,.5,.3)];
+const eegMs=[0,0,0,0];                                  // running mean-square per channel, for the 3D headband pads
+let blinks=[], emgUntil=-1, emgPrev=0, moveT0=-99, gazeT0=-99, gazeDir=1, lastBlinkT=-99;
 let rp=0, respAmp=1, deepPending=false, deepActive=false, breathTimes=[];
 let bp=0, responses=[], sclT=3.3, tempC=33.3;
 const markers=[];
@@ -887,24 +913,37 @@ function step(){
   tempC+=(33.6-1.8*p.arousal-1.5*vaso-tempC)/(35*FS);
   const temp=tempC+.0015*gauss();
 
-  // EEG
-  phA+=TAU*(10.1+ou(jA))/FS; phB1+=TAU*(21+ou(jB1))/FS; phB2+=TAU*(18+ou(jB2))/FS;
-  phT+=TAU*(5.8+ou(jT))/FS; phD+=TAU*(1.8+ou(jD))/FS;
-  const alphaC=p.alpha*clamp(ou(eA),.05,1.5)*Math.sin(phA);
+  // EEG, Muse montage. AF7/AF8 sit on the forehead: big blinks, sideways eye movements (opposite polarity left vs
+  // right), frontal theta. TP9/TP10 sit behind the ears: alpha when the eyes close (weaker than at the back of the
+  // head, where Muse has no sensor) and heavy jaw-muscle noise from the temporalis right underneath. The reference
+  // is at Fpz on the forehead, so blinks also appear small and upside-down on TP9/TP10.
+  phA+=TAU*(10.1+ou(jA))/FS; phT+=TAU*(5.8+ou(jT))/FS; phD+=TAU*(1.8+ou(jD))/FS;
+  for(let c=0;c<EEG_N;c++) phBx[c]+=TAU*((c%3?20:18)+ou(jBx[c]))/FS;
+  const alphaL=p.alpha*clamp(ou(eAx[0]),.05,1.5)*Math.sin(phA), alphaR=p.alpha*clamp(ou(eAx[1]),.05,1.5)*Math.sin(phA+.35);
   const thetaC=p.theta*clamp(ou(eT),.05,1.5)*Math.sin(phT);
   const deltaC=p.delta*clamp(ou(eD),.05,1.5)*Math.sin(phD);
   let blinkV=0; for(const b of blinks){const x=t-b; if(x>=0&&x<.6) blinkV+=115*Math.exp(-(((x-.15)/.075)**2));}
+  if(blinkV>30) lastBlinkT=t;
+  const gx=t-gazeT0, gh=gx%.8;   // look to one side for 0.8 s, then back: a step, then a step the other way
+  const gaze=gx>=0&&gx<1.6?gazeDir*70*(gx<.8?1:-1)*(1-Math.exp(-gh/.04))*Math.exp(-gh/1.5):0;
   let emg=0; if(t<emgUntil){const w=gauss(); emg=(w-emgPrev)*18; emgPrev=w;}
-  driftOz.sig=looseOz?40:8;
-  const lineFz=5*Math.sin(TAU*60*t+.3), lineOz=(looseOz?55:5)*Math.sin(TAU*60*t);
-  let fz=.3*alphaC+p.beta*clamp(ou(eB1),.05,1.5)*Math.sin(phB1)+1.2*thetaC+1.1*deltaC+5*pinkFz()+1.5*gauss()+blinkV+emg+ou(driftFz)+lineFz+110*m;
-  let oz=alphaC+.8*p.beta*clamp(ou(eB2),.05,1.5)*Math.sin(phB2)+.6*thetaC+deltaC+5*pinkOz()+1.5*gauss()+.05*blinkV+.4*emg+ou(driftOz)+lineOz-80*m+(looseOz?3*gauss():0);
-  fz=applyF(0,fz); oz=applyF(1,oz);
+  drift[TP9].sig=looseTP9?40:10;
+  const line=c=>(c===TP9&&looseTP9?55:4)*Math.sin(TAU*60*t+.3*c);
+  const beta=c=>p.beta*clamp(ou(eBx[c]),.05,1.5)*Math.sin(phBx[c]);
+  const eeg=[
+    .7*alphaL+beta(TP9)+.6*thetaC+deltaC-.3*blinkV+1.3*emg-90*m,
+    .25*alphaL+beta(AF7)+1.1*thetaC+1.1*deltaC+.85*blinkV+gaze+.5*emg+80*m,
+    .25*alphaR+beta(AF8)+1.1*thetaC+1.1*deltaC+.85*blinkV-gaze+.5*emg+80*m,
+    .7*alphaR+beta(TP10)+.6*thetaC+deltaC-.3*blinkV+1.3*emg-90*m,
+  ].map((v,c)=>applyF(c,v+5*pinkN[c]()+1.5*gauss()+ou(drift[c])+line(c)+(c===TP9&&looseTP9?3*gauss():0)));
+  for(let c=0;c<EEG_N;c++) eegMs[c]+=(eeg[c]*eeg[c]-eegMs[c])*.004;
 
   BIO.pulse=pulse(bp); BIO.resp=respSig; BIO.scr=scr; BIO.vaso=vaso; BIO.emg=t<emgUntil; BIO.blink=blinkV;
   BIO.alpha=p.alpha; BIO.theta=p.theta; BIO.beta=p.beta; BIO.eyesClosed=eyesClosed; BIO.temp=temp; BIO.eda=eda; BIO.move=m;
-  const vals=[fz,oz,ppg,respSig,eda,temp];
-  for(let i=0;i<6;i++) CH[i].buf[wIdx]=vals[i];
+  BIO.gaze=gaze; BIO.looseTP9=looseTP9;
+  if(sampCount%25===0) BIO.museAct={TP9:clamp(Math.sqrt(eegMs[0])/60,0,1),AF7:clamp(Math.sqrt(eegMs[1])/60,0,1),AF8:clamp(Math.sqrt(eegMs[2])/60,0,1),TP10:clamp(Math.sqrt(eegMs[3])/60,0,1)};
+  const vals=[...eeg,ppg,respSig,eda,temp];
+  for(let i=0;i<vals.length;i++) CH[i].buf[wIdx]=vals[i];
   wIdx=(wIdx+1)%BUF; sampCount++;
 
   if(sampCount%FS===0){ blinks=blinks.filter(b=>t-b<1); responses=responses.filter(r=>t-r.t0<60); }
@@ -918,7 +957,7 @@ function log(title,text){
   li.querySelector('b').textContent=title; li.querySelector('span:last-child').textContent=text;
   logEl.prepend(li); while(logEl.children.length>30) logEl.lastChild.remove();
 }
-const ORG_OF={'Blink':'eyes','Eyes closed':'brain','Eyes open':'brain','Startle':'finger','Deep breath':'lungs','Jaw clench':'jaw','Head move':'brain','Oz loose':'brain','Oz fixed':'brain'};
+const ORG_OF={'Blink':'eyes','Eyes closed':'brain','Eyes open':'brain','Startle':'finger','Deep breath':'lungs','Jaw clench':'jaw','Head move':'brain','Look sideways':'eyes','TP9 loose':'brain','TP9 fixed':'brain'};
 function mark(label){markers.push({t:simT,label}); if(markers.length>40)markers.shift(); if(ORG_OF[label]&&BIO.onEvent) BIO.onEvent(ORG_OF[label]);}
 
 function setChip(){
@@ -954,21 +993,23 @@ $('mysteryBtn').onclick=()=>{
 };
 
 $('evBlink').onclick=()=>{blinks.push(simT+.02);mark('Blink');
-  log('Blink','The eye is an electrical dipole with the cornea positive. Lid movement shifts it and produces a large, slow positive wave strongest at Fz and barely visible at Oz.');};
+  log('Blink','The eye is an electrical dipole with the cornea positive. Lid movement shifts it and produces a large, slow wave on the forehead sensors AF7 and AF8. It also shows up smaller and upside-down on TP9/TP10, because Muse measures every channel against a reference on the forehead (Fpz), which sees the blink too.');};
 $('evEyes').onclick=()=>{eyesClosed=!eyesClosed; blinks.push(simT+.02); const P=PRESETS[presetKey]; tg.alpha=eyesClosed?P.aC:P.aO;
   $('evEyes').textContent=eyesClosed?'Open eyes':'Close eyes'; setChip(); mark(eyesClosed?'Eyes closed':'Eyes open');
-  log(eyesClosed?'Eyes closed':'Eyes opened',eyesClosed?'Occipital alpha (8–13 Hz) grows at Oz within a second or two: the Berger effect. Watch the ~10 Hz peak in the spectrum.':'Visual input desynchronizes posterior alpha (alpha blocking). The ~10 Hz peak at Oz shrinks and blinks reappear at Fz.');};
+  log(eyesClosed?'Eyes closed':'Eyes opened',eyesClosed?'Alpha (8–13 Hz) grows within a second or two: the Berger effect. It is strongest over the back of the head; Muse has no sensor there, so you see it on TP9/TP10 behind the ears. Pick TP9 in the spectrum and watch the ~10 Hz peak.':'Visual input desynchronizes alpha (alpha blocking). The ~10 Hz peak on TP9/TP10 shrinks and blinks reappear on AF7/AF8.');};
 $('evStartle').onclick=()=>{const t=simT; blinks.push(t+.05); emgUntil=t+.45;
   responses.push({type:'hr',t0:t+.4,amp:14},{type:'scr',t0:t+1.8,amp:.8+.3*Math.random()},{type:'vaso',t0:t+1.2,amp:.5});
   mark('Startle'); log('Startle (sudden loud tone)','A sympathetic burst: heart rate climbs within seconds, a skin conductance response starts about 1–3 s later, and pleth pulses shrink as finger vessels constrict. The startle reflex also produces a blink and a burst of muscle artifact.');};
 $('evBreath').onclick=()=>{deepPending=true; mark('Deep breath');
   log('Deep breath','Starts at the next exhale trough. A slow, deep breath exaggerates respiratory sinus arrhythmia (heart rate up on the inhale, down on the exhale) and often triggers an SCR and finger vasoconstriction on its own, a classic confound in EDA studies.');};
 $('evJaw').onclick=()=>{emgUntil=simT+1.3; mark('Jaw clench');
-  log('Jaw clench','Muscle (EMG) artifact from temporalis and masseter: broadband, high-frequency activity that overlaps beta and gamma. The 40 Hz low-pass reduces it but also removes real high-frequency EEG.');};
+  log('Jaw clench','Muscle (EMG) artifact from the temporalis and masseter: broadband, high-frequency activity that overlaps beta and gamma. It is worst on TP9/TP10, which sit right on the temporalis. The 40 Hz low-pass reduces it but also removes real high-frequency EEG.');};
+$('evGaze').onclick=()=>{gazeT0=simT; gazeDir=-gazeDir; mark('Look sideways');
+  log('Look sideways','The eyes swing to one side and back. The eye dipole rotates, so AF7 and AF8 move in opposite directions: one goes up while the other goes down. Blinks move both the same way, which is how you tell the two apart.');};
 $('evMove').onclick=()=>{moveT0=simT; mark('Head move');
   log('Head movement','Cable sway and electrode shifts cause large slow deflections across EEG channels, with opposite polarity at different sites. The optical PPG and the resp belt shift too.');};
-$('evLoose').onclick=e=>{looseOz=!looseOz; e.currentTarget.setAttribute('aria-pressed',String(looseOz)); mark(looseOz?'Oz loose':'Oz fixed');
-  log(looseOz?'Oz electrode loosened':'Oz electrode re-seated',looseOz?'Impedance rises, so Oz picks up mains interference (60 Hz in North America) and wanders. Switch the notch off to see the 60 Hz line in the spectrum.':'Impedance is back to normal. Mains pickup and drift at Oz drop.');};
+$('evLoose').onclick=e=>{looseTP9=!looseTP9; e.currentTarget.setAttribute('aria-pressed',String(looseTP9)); mark(looseTP9?'TP9 loose':'TP9 fixed');
+  log(looseTP9?'TP9 lost skin contact':'TP9 back on the skin',looseTP9?'Hair or a glasses arm has lifted the rubber pad behind the left ear, a common Muse problem. Impedance rises, so TP9 wanders and picks up mains interference (60 Hz in North America). Switch the notch off and pick TP9 in the spectrum to see the 60 Hz line.':'Impedance is back to normal. Mains pickup and drift on TP9 drop.');};
 
 [['fHP','hp','High-pass 0.5 Hz','Removes slow drift from sweat and electrode polarization so the trace stays centred. Too high a cutoff distorts slow ERP components.'],
  ['fLP','lp','Low-pass 40 Hz','Attenuates muscle artifact and mains noise above 40 Hz, at the cost of any real gamma activity.'],
@@ -981,7 +1022,7 @@ const cc=$('chChecks');
 CH.forEach((c,i)=>{const l=document.createElement('label'); l.innerHTML=`<input type="checkbox" id="ch${i}" checked><span class="sw" style="background:${c.color}"></span>${c.label}`;
   l.querySelector('input').onchange=e=>{c.on=e.target.checked;resize();}; cc.append(l);});
 
-let W=10, gain=25, specCh=1;
+let W=10, gain=25, specCh=TP9;
 $('winSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{W=+b.dataset.w;$('winSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
 $('specSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{specCh=+b.dataset.c;$('specSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
 $('gainSel').onchange=e=>gain=+e.target.value;
@@ -992,8 +1033,8 @@ const sc=$('scope'), sctx=sc.getContext('2d'), spc=$('spec'), spx=spc.getContext
 let dpr=1, sw=600, laneH=78, sh=0, pw2=600, ph2=190; const AX=20, GUT=70;
 function resize(){
   dpr=Math.min(window.devicePixelRatio||1,2);
-  sw=$('scopeWrap').clientWidth||600; laneH=sw<560?62:78;
-  const n=CH.filter(c=>c.on).length; sh=Math.max(1,n)*laneH+AX;
+  sw=$('scopeWrap').clientWidth||600;
+  const n=CH.filter(c=>c.on).length; laneH=sw<560?(n>6?50:62):(n>6?66:78); sh=Math.max(1,n)*laneH+AX;
   sc.width=Math.round(sw*dpr); sc.height=Math.round(sh*dpr); sc.style.height=sh+'px';
   pw2=$('specWrap').clientWidth||600; ph2=sw<560?160:190;
   spc.width=Math.round(pw2*dpr); spc.height=Math.round(ph2*dpr); spc.style.height=ph2+'px';
@@ -1004,7 +1045,7 @@ new ResizeObserver(resize).observe($('scopeWrap')); new ResizeObserver(resize).o
 let peaks=[];
 function getRecent(ci,N){const c=CH[ci].buf, v=new Float32Array(N); for(let i=0;i<N;i++) v[i]=c[(wIdx-N+i+BUF*2)%BUF]; return v;}
 function detectPeaks(){
-  const N=Math.min(sampCount,BUF); if(N<FS)return; const v=getRecent(2,N), half=Math.round(.6*FS), ref=Math.round(.33*FS);
+  const N=Math.min(sampCount,BUF); if(N<FS)return; const v=getRecent(IDX.ppg,N), half=Math.round(.6*FS), ref=Math.round(.33*FS);
   const out=[]; let lastI=-1e9;
   for(let i=1;i<N-1;i++){ if(!(v[i]>=v[i-1]&&v[i]>v[i+1]))continue;
     let lo=Infinity,hi=-Infinity; const a=Math.max(0,i-half), b=Math.min(N-1,i+half);
@@ -1022,12 +1063,12 @@ function fft(re,im){const n=re.length;
     for(let i=0;i<n;i+=len){let cr=1,ci=0; for(let j=0;j<h;j++){const k=i+j+h; const ar=re[k]*cr-im[k]*ci, ai=re[k]*ci+im[k]*cr;
       re[k]=re[i+j]-ar; im[k]=im[i+j]-ai; re[i+j]+=ar; im[i+j]+=ai; const n2=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=n2;}}}}
 const NF=512, HANN=new Float64Array(NF).map((_,i)=>.5-.5*Math.cos(TAU*i/(NF-1)));
-const specAvg=[new Float64Array(NF/2),new Float64Array(NF/2)];
+const specAvg=[0,1,2,3].map(()=>new Float64Array(NF/2));
 const BANDS=[['δ delta',1,4],['θ theta',4,8],['α alpha',8,13],['β beta',13,30],['γ gamma',30,45]];
-const rel=[[0,0,0,0,0],[0,0,0,0,0]];
+const rel=[0,1,2,3].map(()=>[0,0,0,0,0]);
 function updateSpectrum(){
   if(sampCount<NF)return;
-  for(let c=0;c<2;c++){ const v=getRecent(c,NF); let mean=0; for(const x of v)mean+=x; mean/=NF;
+  for(let c=0;c<EEG_N;c++){ const v=getRecent(c,NF); let mean=0; for(const x of v)mean+=x; mean/=NF;
     const re=new Float64Array(NF), im=new Float64Array(NF); for(let i=0;i<NF;i++) re[i]=(v[i]-mean)*HANN[i]; fft(re,im);
     const A=specAvg[c]; for(let k=0;k<NF/2;k++){const P=(re[k]*re[k]+im[k]*im[k])/NF; A[k]=A[k]===0?P:.7*A[k]+.3*P;}
     let tot=0; const bpw=BANDS.map(([,a,b])=>{let s=0; for(let k=Math.ceil(a*NF/FS);k<b*NF/FS;k++)s+=A[k]; tot+=s; return s;});
@@ -1095,6 +1136,7 @@ function drawScope(){
     c.strokeStyle=ch.color; c.lineWidth=1.25; c.lineJoin='round'; c.stroke();
     if(ch.key==='ppg'){c.fillStyle='#FFD1D1'; for(const a of peaks){const i=a-(sampCount-N); if(i<0||i>=N)continue; const x=x0+pw*(1-(N-1-i)/span), y=Y(buf[(wIdx-N+i+BUF*2)%BUF]); c.beginPath(); c.arc(x,y-5,2.2,0,TAU); c.fill();}}
     c.restore();
+    if(ch.key===sigSel||(SIG[sigSel]&&SIG[sigSel]===SIG[ch.key])){ c.strokeStyle='rgba(230,240,236,.45)'; c.lineWidth=1.5; c.strokeRect(1.5,top+1.5,sw-3,laneH-3); }
   });
   // markers
   c.font='10px "JetBrains Mono",monospace';
@@ -1112,12 +1154,13 @@ function updateReadouts(){
   const bt=breathTimes.slice(-4); const bi=[]; for(let i=1;i<bt.length;i++) bi.push(bt[i]-bt[i-1]);
   $('rRR').innerHTML=bi.length?(60/median(bi)).toFixed(0)+'<small>/min</small>':'—';
   const last=i=>CH[i].buf[(wIdx-1+BUF)%BUF];
-  $('rSCL').innerHTML=last(4).toFixed(2)+'<small>µS</small>';
+  $('rSCL').innerHTML=last(IDX.eda).toFixed(2)+'<small>µS</small>';
   $('rSCR').innerHTML=responses.filter(r=>r.type==='scr'&&r.t0<=simT&&simT-r.t0<60&&r.amp>=.05).length+'<small>≥0.05 µS</small>';
-  $('rTemp').innerHTML=last(5).toFixed(2)+'<small>°C</small>';
-  $('rAlpha').innerHTML=Math.round(rel[1][2]*100)+'<small>% power</small>';
+  $('rTemp').innerHTML=last(IDX.temp).toFixed(2)+'<small>°C</small>';
+  const alphaTP=(rel[TP9][2]+rel[TP10][2])/2;
+  $('rAlpha').innerHTML=Math.round(alphaTP*100)+'<small>% power</small>';
   BIO.hrBpm=ibi.length?Math.round(60/median(ibi)):null; BIO.rrMin=bi.length?Math.round(60/median(bi)):null;
-  BIO.scl=last(4); BIO.tempC=last(5); BIO.alphaPct=Math.round(rel[1][2]*100); BIO.stateName=$('stateChip').textContent.replace(/^State:\s*/,'');
+  BIO.scl=last(IDX.eda); BIO.tempC=last(IDX.temp); BIO.alphaPct=Math.round(alphaTP*100); BIO.stateName=$('stateChip').textContent.replace(/^State:\s*/,'');
   $('clock').textContent='t = '+simT.toFixed(1)+' s';
 }
 
@@ -1126,8 +1169,64 @@ applyPreset('relaxed',true);
 document.querySelector('#presetBtns [data-k="relaxed"]').setAttribute('aria-pressed','true');
 for(let i=0;i<FS*12;i++){step(); if(i%(FS/4)===0&&i>NF)updateSpectrum();}
 detectPeaks(); updateSpectrum(); resize();
-log('Session started','Subject is relaxed with eyes closed. Oz shows strong alpha; heart rate rises and falls with each breath. Try the Events panel.');
+log('Session started','Subject is relaxed with eyes closed, wearing a Muse headband. TP9/TP10 behind the ears show clear alpha; heart rate rises and falls with each breath. Try the Events panel.');
 updateReadouts();
+
+/* ---------- reading the scope: what's on screen now + tap a trace to learn it ---------- */
+const SIG={
+  tp9:{name:'TP9 and TP10 · EEG behind the ears',what:'Brain activity from the temporal lobes, picked up by rubber sensors behind the ears. The clearest rhythm here is alpha, 8–13 waves a second, which appears when the eyes close and the visual system idles.',
+    where:'Muse headband, behind each ear (TP9 left, TP10 right), measured against the forehead reference Fpz',unit:'microvolts (µV); brain rhythms are 10–100 µV',
+    look:'Rhythmic ~10 Hz waves when the eyes close; fuzzy fast noise when the jaw clenches (the temporalis muscle is right underneath)',organ:'brain'},
+  af7:{name:'AF7 and AF8 · EEG on the forehead',what:'Brain activity from the front of the head. These sensors sit just above the outer eyebrows, so they also pick up the eyes: blinks and eye movements are often bigger than the brain signal itself.',
+    where:'Muse headband, forehead (AF7 left, AF8 right), measured against Fpz',unit:'microvolts (µV)',
+    look:'Big slow bumps on both at every blink; opposite swings when the eyes look sideways; slow 4–8 Hz theta when drowsy',organ:'eyes'},
+  ppg:{name:'PPG · pulse at the fingertip',what:'A light shines into the fingertip and a sensor measures how much comes back. Each heartbeat pushes extra blood into the finger, which absorbs more light, so every tall peak is one heartbeat. The small second bump is the dicrotic notch, when the aortic valve closes.',
+    where:'Fingertip clip, or the rear camera and flash in Live pulse check',unit:'arbitrary units (only the shape and timing matter)',
+    look:'Peak spacing gives heart rate; beats bunch up on each in-breath; pulses shrink when the finger\'s blood vessels tighten',organ:'heart'},
+  resp:{name:'RESP · breathing',what:'A stretchy belt around the chest measures how much it expands. Up is breathing in, down is breathing out.',
+    where:'Chest belt',unit:'arbitrary units',look:'Breathing rate (12–20 per minute at rest), and how heart rate on the PPG speeds up on each inhale',organ:'lungs'},
+  eda:{name:'EDA · skin conductance',what:'Two electrodes pass a tiny current across the skin. Sweat glands, switched on only by the sympathetic ("fight or flight") nervous system, make the skin conduct better.',
+    where:'Two fingertips',unit:'microsiemens (µS)',look:'A slow baseline, plus quick rises 1–3 s after a surprise, which then fade over several seconds',organ:'finger'},
+  temp:{name:'TEMP · skin temperature',what:'A thermometer on the finger. Skin temperature follows blood flow: when the sympathetic nervous system tightens the vessels, less warm blood arrives and the finger slowly cools.',
+    where:'Finger',unit:'degrees Celsius; the scale zooms in to hundredths of a degree',look:'Slow drift over tens of seconds; falls under stress',organ:'finger'},
+};
+SIG.tp10=SIG.tp9; SIG.af8=SIG.af7;
+let sigSel=null;
+const escS=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const reduceMotionScope=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sigChips=$('sigChips');
+CH.forEach(c=>{const b=document.createElement('button');b.type='button';b.dataset.k=c.key;b.style.setProperty('--c',c.color);b.innerHTML=`<i></i>${c.label}`;b.setAttribute('aria-pressed','false');b.onclick=()=>pickSig(c.key);sigChips.append(b);});
+function pickSig(k){
+  sigSel=k; const S=SIG[k], c=CH[IDX[k]];
+  sigChips.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===k)));
+  $('sigInfo').innerHTML=`<h3></h3><p class="w"></p><dl><dt>Measured</dt><dd class="m"></dd><dt>Units</dt><dd class="u"></dd><dt>Look for</dt><dd class="l"></dd></dl>`;
+  const I=$('sigInfo'); I.querySelector('h3').textContent=S.name; I.querySelector('.w').textContent=S.what;
+  I.querySelector('.m').textContent=S.where; I.querySelector('.u').textContent=S.unit; I.querySelector('.l').textContent=S.look;
+}
+$('sigInfo').innerHTML='<p class="note">Tap any trace on the scope, or a name above, to see what it is, where it\'s measured and what to look for.</p>';
+sc.addEventListener('click',e=>{
+  const r=sc.getBoundingClientRect(), y=e.clientY-r.top, vis=CH.filter(c=>c.on), i=Math.floor(y/laneH);
+  if(i>=0&&i<vis.length){ pickSig(vis[i].key); $('readCard').scrollIntoView({behavior:reduceMotionScope?'auto':'smooth',block:'nearest'}); }
+});
+function renderNow(){
+  const t=simT, it=[], col=k=>CH[IDX[k]].color;
+  if(t-lastBlinkT<2.5) it.push([col('af7'),'Blink on AF7/AF8: the big slow bump is the eye moving, not the brain. It shows up small and upside-down on TP9/TP10.']);
+  if(t-gazeT0>=0&&t-gazeT0<2.5) it.push([col('af8'),'The eyes looked sideways: AF7 and AF8 swing in opposite directions.']);
+  if(t<emgUntil+1.5) it.push([col('tp9'),'Jaw muscle noise: the fuzzy fast activity, worst on TP9/TP10, is muscle, not brain.']);
+  if(t-moveT0>=0&&t-moveT0<3) it.push([col('af7'),'Head movement: large slow swings on every EEG channel.']);
+  if(looseTP9) it.push([col('tp9'),filt.notch?'TP9 has poor skin contact: it wanders more than TP10.':'TP9 has poor skin contact: the thick fuzzy band on it is 60 Hz hum from the mains.']);
+  if(BIO.eyesClosed&&p.alpha>20) it.push([col('tp9'),'Eyes closed: steady ~10 Hz alpha waves on TP9/TP10, the brain\'s visual system idling.']);
+  else if(p.theta>18) it.push([col('af7'),'Drowsy: slower 4–8 Hz theta waves, strongest on AF7/AF8.']);
+  else if(p.beta>14) it.push([col('af7'),'Busy brain: fast, small 13–30 Hz beta ripples on all four EEG channels.']);
+  else if(!BIO.eyesClosed) it.push([col('tp9'),'Eyes open: alpha is small (alpha blocking), so the EEG looks irregular.']);
+  if(deepActive) it.push([col('resp'),'Slow deep breath: heart rate climbs on the inhale and falls on the exhale (watch the PPG peaks bunch up).']);
+  if(responses.some(r=>r.type==='scr'&&r.amp>=.3&&t-r.t0>0&&t-r.t0<7)) it.push([col('eda'),'Skin conductance rising: sweat glands switched on by the sympathetic nervous system a second or two after the event.']);
+  if((BIO.vaso||0)>.15) it.push([col('ppg'),'Smaller PPG pulses: blood vessels in the finger tightened (vasoconstriction).']);
+  if(BIO.hrBpm) it.push([col('ppg'),`Heart: ${BIO.hrBpm} bpm. Each tall PPG peak is one heartbeat${p.arousal<.4?'; beats bunch up as you breathe in and spread out as you breathe out':''}.`]);
+  if(!filt.hp) it.push([col('af7'),'High-pass filter off: the EEG baseline drifts slowly.']);
+  $('nowList').innerHTML=it.slice(0,5).map(([c,txt])=>`<li style="--c:${c}"><i></i><span>${escS(txt)}</span></li>`).join('');
+}
+setInterval(renderNow,1000);
 
 let lastT=performance.now(), tSpec=0, tRead=0, tPk=0;
 function frame(now){
@@ -1195,18 +1294,18 @@ function wireAsk({box,input,btn,stop,chips,ans,questions,build,tier}){
 const ORGANS={
  body:{btn:'Whole body',kicker:'Pick an organ',title:'Whole body',lanes:null,box:[0,0,360,760],
    text:'Every trace on the scope starts in a body system. Pick an organ, or tap it on the 3D body, to fly in. The scope dims every channel except the ones that organ drives. With "Zoom to events" on, the figure follows each event you fire.',
-   facts:[['Brain','EEG rhythms at Fz and Oz'],['Eyes, jaw','the two biggest EEG artifacts'],['Heart, lungs','pulse, heart rate and its breathing rhythm'],['Fingertip','sweat, blood flow and temperature under sympathetic control']],
+   facts:[['Brain','EEG from a Muse headband: AF7, AF8, TP9, TP10'],['Eyes, jaw','the two biggest EEG artifacts'],['Heart, lungs','pulse, heart rate and its breathing rhythm'],['Fingertip','sweat, blood flow and temperature under sympathetic control']],
    asks:['How are the brain and heart signals connected?','What does the autonomic nervous system control here?']},
- brain:{btn:'Brain',kicker:'EEG · Fz and Oz',title:'Brain',lanes:['fz','oz'],box:[106,-24,146,244],
-   text:'Scalp EEG picks up the summed synaptic currents of millions of pyramidal neurons working in step. Fz sits over frontal midline cortex, Oz over visual cortex at the back of the head. The rhythms reflect state: posterior alpha when the eyes close, frontal theta with effort or drowsiness, beta with active thinking. The occipital lobe here brightens as alpha grows.',
-   facts:[['Sensor','Ag/AgCl or dry electrodes, referenced to the ears or mastoids'],['Size','10–100 µV at the scalp'],['On the scope','Close the eyes and watch Oz alpha climb in the spectrum']],
-   asks:['Why is alpha strongest over the back of the head?','Why are EEG signals so small?','How does Muse measure EEG with only four sensors?'],
-   live:()=>BIO.alphaPct!=null?`Now: Oz alpha ${BIO.alphaPct}% of EEG power · eyes ${BIO.eyesClosed?'closed':'open'}`:''},
- eyes:{btn:'Eyes',kicker:'Blink artifact (EOG) · strongest at Fz',title:'Eyes',lanes:['fz'],box:[196,50,64,106],
-   text:'The eye is a small battery: the cornea is positive relative to the retina. When the lid slides down or the eye rotates, that dipole shifts and its field reaches the scalp. Frontal electrodes see a large slow wave, often bigger than the brain signal itself, while Oz barely notices.',
-   facts:[['Size','50–200 µV, about 200–400 ms per blink'],['Cleaning','ICA, or regression against dedicated EOG channels'],['On the scope','Press Blink and compare Fz with Oz']],
+ brain:{btn:'Brain',kicker:'EEG · Muse headband (TP9, AF7, AF8, TP10)',title:'Brain',lanes:['tp9','af7','af8','tp10'],box:[106,-24,146,244],
+   text:'Scalp EEG picks up the summed synaptic currents of millions of pyramidal neurons working in step. A Muse headband has four dry sensors: AF7 and AF8 on the forehead above the outer eyebrows, and TP9 and TP10 behind the ears, all measured against a reference at the centre of the forehead (Fpz). The forehead pair hears frontal theta and every blink; the ear pair hears alpha when the eyes close. The brain glows as alpha grows.',
+   facts:[['Sensor','4 dry electrodes on a headband, plus a forehead reference'],['Size','10–100 µV at the scalp'],['On the scope','Close the eyes and watch TP9/TP10 alpha climb in the spectrum']],
+   asks:['Why does alpha show up behind the ears on a Muse?','Why are EEG signals so small?','What can a 4-sensor headband measure well, and what can\'t it?'],
+   live:()=>BIO.alphaPct!=null?`Now: alpha on TP9/TP10 ${BIO.alphaPct}% of EEG power · eyes ${BIO.eyesClosed?'closed':'open'}`:''},
+ eyes:{btn:'Eyes',kicker:'Blink and eye-movement artifact (EOG) · AF7, AF8',title:'Eyes',lanes:['af7','af8'],box:[196,50,64,106],
+   text:'The eye is a small battery: the cornea is positive relative to the retina. When the lid slides down or the eye rotates, that dipole shifts and its field reaches the scalp. The forehead sensors AF7 and AF8 see a large slow wave, often bigger than the brain signal itself. A blink moves both the same way; looking sideways moves them in opposite directions.',
+   facts:[['Size','50–200 µV, about 200–400 ms per blink'],['Cleaning','ICA, or regression against dedicated EOG channels'],['On the scope','Press Blink, then Look sideways, and compare AF7 with AF8']],
    asks:['Why does a blink show up in EEG?','How do researchers remove blink artifacts?']},
- jaw:{btn:'Jaw muscle',kicker:'Muscle artifact (EMG) · Fz and Oz',title:'Jaw muscle',lanes:['fz','oz'],box:[168,82,74,120],
+ jaw:{btn:'Jaw muscle',kicker:'Muscle artifact (EMG) · worst on TP9, TP10',title:'Jaw muscle',lanes:['tp9','tp10'],box:[168,82,74,120],
    text:'Clenching the jaw contracts the masseter and temporalis. Muscle fibres fire fast and out of step, so their electrical activity is broadband and spills into the beta and gamma bands. It is the main reason high-frequency EEG from headbands needs care.',
    facts:[['Band','roughly 20–300 Hz, overlapping beta and gamma'],['Fixes','relax the jaw, low-pass filter, or reject the segment'],['On the scope','Press Jaw clench, then turn on the 40 Hz low-pass']],
    asks:['Why does muscle artifact look like gamma?','Can a low-pass filter fully remove EMG?']},

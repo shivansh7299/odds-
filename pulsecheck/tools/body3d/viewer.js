@@ -5,6 +5,7 @@
  *   const body = mountBody(hostElement, { state: () => ({ hr, breath, brain, running }), onPick, onStatus });
  *   body.focus("heart" | "brain" | "eyes" | "jaw" | "lungs" | "finger" | "wrist" | "body");
  *   body.setWearables(true); body.setLayer("skeleton", false); body.dispose();
+ *   state().muse = { TP9, AF7, AF8, TP10 } (0..1 activity) lights the Muse headband's electrodes.
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -23,6 +24,66 @@ const VIEWS = {
 };
 // Which wearable site to highlight and orbit for each organ.
 const SITE_OF = { heart: "carotid", lungs: "carotid", finger: "finger", wrist: "wrist", brain: "forehead", eyes: "forehead", jaw: "ear" };
+
+// Muse headband (not part of Plethscape): electrode sites as azimuth around the head (degrees, 0 = straight ahead,
+// positive toward the person's left, +x) and height. AF7/AF8 sit on the forehead above the outer eyebrows; TP9/TP10
+// are rubber pads behind the ears. The band runs across the forehead and rests on top of the ears like glasses.
+const MUSE_SITES = { TP9: [112, 3.375], AF7: [38, 3.478], AF8: [-38, 3.478], TP10: [-112, 3.375] };
+const MUSE_PATH = [[-112, 3.375], [-100, 3.405], [-86, 3.445], [-62, 3.47], [-38, 3.478], [-18, 3.482], [0, 3.483],
+  [18, 3.482], [38, 3.478], [62, 3.47], [86, 3.445], [100, 3.405], [112, 3.375]];
+export const MUSE_COLORS = { TP9: 0x6fa8f0, AF7: 0xf08a5d, AF8: 0x3cc895, TP10: 0xe8b53a };
+const HEAD_ORGANS = new Set(["brain", "eyes", "jaw"]);
+
+function textSprite(THREE, text, color) {
+  const c = document.createElement("canvas"); c.width = 128; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgba(10,18,16,0.82)"; g.beginPath(); g.roundRect(8, 12, 112, 40, 10); g.fill();
+  g.fillStyle = color; g.font = "600 28px ui-monospace, Menlo, monospace"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(text, 64, 33);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }));
+  sp.scale.set(0.09, 0.045, 1); sp.renderOrder = 10;
+  return sp;
+}
+
+/** Fit a Muse headband to the loaded head: rays from outside find the skin, the band sits just above it. */
+function buildMuse(THREE, skin) {
+  const ray = new THREE.Raycaster();
+  const cast = (from, to) => { ray.set(from, to.clone().sub(from).normalize()); return ray.intersectObject(skin, true)[0]?.point || null; };
+  const y0 = 3.47;
+  const front = cast(new THREE.Vector3(0, y0, 3), new THREE.Vector3(0, y0, 0));
+  const back = cast(new THREE.Vector3(0, y0, -3), new THREE.Vector3(0, y0, 0));
+  const zc = front && back ? (front.z + back.z) / 2 : 0.02;
+  const left = cast(new THREE.Vector3(3, 3.42, zc), new THREE.Vector3(0, 3.42, zc));
+  const right = cast(new THREE.Vector3(-3, 3.42, zc), new THREE.Vector3(0, 3.42, zc));
+  const xc = left && right ? (left.x + right.x) / 2 : 0;
+  const rx = left && right ? (left.x - right.x) / 2 : 0.155, rz = front && back ? (front.z - back.z) / 2 : 0.19;
+  const onHead = ([az, y], lift) => {
+    const a = (az * Math.PI) / 180, dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+    const c = new THREE.Vector3(xc, y, zc);
+    const hit = cast(c.clone().add(dir.clone().multiplyScalar(3)), c);
+    const p = hit || c.clone().add(new THREE.Vector3(Math.sin(a) * rx, 0, Math.cos(a) * rz));
+    const out = p.clone().sub(c).setY(0).normalize();
+    return { p: p.clone().add(out.clone().multiplyScalar(lift)), out };
+  };
+  const group = new THREE.Group(); group.name = "muse";
+  const band = new THREE.MeshStandardMaterial({ color: 0x1d2530, roughness: 0.42, metalness: 0.15 });
+  const curve = new THREE.CatmullRomCurve3(MUSE_PATH.map((q) => onHead(q, 0.011).p), false, "centripetal");
+  group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 140, 0.0085, 10, false), band));
+  const pads = {}, labels = {};
+  for (const [name, site] of Object.entries(MUSE_SITES)) {
+    const { p, out } = onHead(site, 0.006);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2a323c, emissive: MUSE_COLORS[name], emissiveIntensity: 0.25, roughness: 0.35 });
+    const geo = name.startsWith("AF") ? new THREE.CylinderGeometry(0.019, 0.019, 0.007, 20) : new THREE.SphereGeometry(0.016, 18, 12);
+    const pad = new THREE.Mesh(geo, mat);
+    pad.position.copy(p);
+    pad.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), out);   // disc faces the skin
+    group.add(pad); pads[name] = pad;
+    const lab = textSprite(THREE, name, "#" + MUSE_COLORS[name].toString(16).padStart(6, "0"));
+    lab.position.copy(p.clone().add(out.clone().multiplyScalar(0.07)).add(new THREE.Vector3(0, 0.035, 0)));
+    group.add(lab); labels[name] = lab;
+  }
+  return { group, pads, labels };
+}
 
 export function mountBody(host, { state = () => ({}), onPick, onStatus } = {}) {
   let renderer;
@@ -72,7 +133,7 @@ export function mountBody(host, { state = () => ({}), onPick, onStatus } = {}) {
   scene.add(...Object.values(auras.sprites));
   anatomy.wearables.group.visible = false;
 
-  let organ = "body", site = "finger", showWearables = false, loaded = false, disposed = false;
+  let organ = "body", site = "finger", showWearables = false, loaded = false, disposed = false, muse = null;
   const brainMats = [];
   let flight = null, cycles = 0, breathClock = 0, lastNow = 0, hrNow = 70, flashUntil = 0;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
@@ -112,7 +173,7 @@ export function mountBody(host, { state = () => ({}), onPick, onStatus } = {}) {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects([anatomy.layers.body, anatomy.heart, anatomy.wearables.group], true)[0];
+    const hit = ray.intersectObjects([anatomy.layers.body, anatomy.heart, anatomy.wearables.group, ...(muse ? [muse.group] : [])], true)[0];
     if (!hit) return;
     const anchors = {
       brain: new THREE.Vector3(0, 3.52, -0.02), eyes: new THREE.Vector3(0.03, 3.4, 0.14), jaw: new THREE.Vector3(0.07, 3.2, 0.06),
@@ -136,6 +197,7 @@ export function mountBody(host, { state = () => ({}), onPick, onStatus } = {}) {
       if (!anatomy.group.userData.bodyLoaded) return;
       anatomy.group.traverse((o) => { if (o.isMesh && o.userData.tissue === "brain") brainMats.push(...[].concat(o.material)); });
       loaded = true; anatomy.setPresentation("atlas"); anatomy.setCutaway(true); anatomy.setGlow("amber");
+      try { muse = buildMuse(THREE, anatomy.layers.body); scene.add(muse.group); } catch (e) { console.warn("Muse headband skipped:", e); }
       onStatus?.({ ready: true });
       if (organ !== "body") fly(organ);
     }
@@ -164,6 +226,14 @@ export function mountBody(host, { state = () => ({}), onPick, onStatus } = {}) {
     anatomy.wearables.setSelected(site);
     anatomy.setFlowFocus(site, organ === "finger" || organ === "wrist" || now < flashUntil);
 
+    if (muse) {   // headband: with the wearables, or whenever the view is on the head (the EEG channels are Muse's)
+      const head = HEAD_ORGANS.has(organ);
+      muse.group.visible = showWearables || head;
+      const act = s.muse || {};
+      for (const [name, pad] of Object.entries(muse.pads)) pad.material.emissiveIntensity = 0.25 + 1.6 * Math.max(0, Math.min(1, act[name] ?? 0));
+      for (const lab of Object.values(muse.labels)) lab.visible = head;
+    }
+
     const t = now / 1000;
     auras.update(t, site, null, organ !== "body", reduced.matches, cardiac.phase);
     for (const id of WEARABLE_SITES) {
@@ -191,6 +261,7 @@ export function mountBody(host, { state = () => ({}), onPick, onStatus } = {}) {
     reset() { this.focus("body"); },
     dispose() {
       disposed = true; renderer.setAnimationLoop(null); io.disconnect(); controls.dispose();
+      if (muse) muse.group.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
       auras.dispose(); anatomy.dispose(); envTarget.dispose(); renderer.dispose(); renderer.domElement.remove();
     },
   };
