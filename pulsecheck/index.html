@@ -148,6 +148,11 @@ input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
 .chips button:hover{color:var(--ink);border-color:var(--accent)}
 .answer{font-size:14px;line-height:1.55;max-width:72ch}
 .answer p{margin:0 0 8px} .answer ul{margin:0 0 8px;padding-left:18px}
+#gCard{display:flex;flex-direction:column;gap:10px}
+.gSet{display:flex;flex-wrap:wrap;gap:8px}
+.gSet input{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);color:var(--ink);min-width:0}
+#gKey{flex:2 1 220px} #gModel{flex:1 1 150px;font-size:13px}
+.gState[data-k="busy"]{color:var(--accent)} .gState[data-k="err"],.answer .err{color:var(--poor)}
 .note{font-size:12.5px;color:var(--muted);margin:0}
 #avatar .bf{fill:var(--body);stroke:var(--body-edge);stroke-width:1.4}
 #avatar .bb{fill:var(--body-back);stroke:var(--body-edge);stroke-width:1.2}
@@ -665,7 +670,7 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
   <div class="pane" id="paneWear" role="tabpanel" aria-labelledby="tabBtnWear" hidden>
     <section class="card">
       <h2>Your wearable data</h2>
-      <p class="oText" style="margin-top:6px">Load the export files from your devices to see your own heart, sleep, breathing, temperature and EEG data next to the physiology behind it. Files are read inside this browser tab. Nothing is uploaded or saved, and closing the tab clears it.</p>
+      <p class="oText" style="margin-top:6px">Load the export files from your devices to see your own heart, sleep, breathing, temperature and EEG data next to the physiology behind it. Files are read inside this browser tab. Nothing is uploaded or saved, and closing the tab clears it. The only exception is the optional Gemini analysis below, which sends a numeric summary once you add your own API key.</p>
       <div class="drop" id="drop">
         <input type="file" id="fileIn" multiple accept=".zip,.xml,.csv,.tsv,.txt,.json">
         <label for="fileIn" class="btn primary">Choose files</label>
@@ -705,6 +710,23 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
         <div class="answer" id="dAns" aria-live="polite"></div>
       </div>
       <p class="note" style="margin-top:12px">These are patterns in consumer-device data for learning, not medical advice. Devices estimate these values and each brand computes them differently.</p>
+    </section>
+
+    <section class="card" id="gCard" aria-labelledby="gTitle">
+      <div class="chartsHead">
+        <h2 id="gTitle">AI analysis · Gemini</h2>
+        <span class="note gState" id="gState" aria-live="polite"></span>
+      </div>
+      <p class="note" style="margin-top:6px">Sends a summary of the numbers above (daily values, hourly heart rate, EEG band power), not your files, to Google's Gemini API with your own API key. The key is kept only in this browser. Get one free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+      <div class="gSet">
+        <input id="gKey" type="password" placeholder="Gemini API key" autocomplete="off" spellcheck="false" aria-label="Gemini API key">
+        <input id="gModel" type="text" class="mono" autocomplete="off" spellcheck="false" aria-label="Gemini model">
+        <button class="btn primary" id="gRun" type="button">Analyze</button>
+        <button class="btn" id="gStop" type="button" hidden>Stop</button>
+        <button class="btn" id="gForget" type="button" hidden>Forget key</button>
+      </div>
+      <label class="note"><input type="checkbox" id="gAuto"> Re-analyze automatically when the data changes</label>
+      <div class="answer" id="gAns" aria-live="polite"></div>
     </section>
 
     <section class="card">
@@ -1634,6 +1656,7 @@ function renderWear(){
   else if(DATA.files.length){ b.innerHTML='<span><b>Your data</b> from '+DATA.files.map(f=>esc(f.name)).join(', ')+'. Load more files to combine devices.</span><button class="btn" type="button" id="clearEx">Clear</button><button class="btn" type="button" id="loadEx">Show example instead</button>'; $('clearEx').onclick=()=>{resetData(); statusEl.innerHTML=''; renderWear();}; $('loadEx').onclick=()=>{loadExample(); renderWear();}; }
   else { b.innerHTML='<span>No data loaded yet.</span><button class="btn" type="button" id="loadEx">Show example data</button>'; $('loadEx').onclick=()=>{loadExample(); renderWear();}; }
   renderKpis(); renderInsights(); renderCharts(); renderHrDay(); renderMuse(); dataAsk.refreshChips();
+  window.dispatchEvent(new Event('wear:update'));
 }
 function goOrgan(o){ showTab('scope'); selectOrgan(o); $('bodyMap').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'start'}); }
 function renderKpis(){
@@ -1835,12 +1858,16 @@ Question: ${q}
 Data (dates are MM-DD):
 ${digest()}`});
 
+// for gemini-wear.js
+BIO.wear={digest, isExample:()=>DATA.example, md:mdLite};
+
 /* ---- boot ---- */
 loadExample(); renderWear();
 let rT=null; new ResizeObserver(()=>{clearTimeout(rT); rT=setTimeout(()=>{ if(!$('paneWear').hidden){renderCharts(); renderHrDay(); renderMuse();} },150);}).observe($('paneWear'));
 })();
 </script>
 <script type="module" src="app-live.js"></script>
+<script type="module" src="gemini-wear.js"></script>
 
 </body>
 </html>
