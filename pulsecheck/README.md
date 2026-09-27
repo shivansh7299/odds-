@@ -24,6 +24,7 @@ A neuroscience teaching app built around a 3D body. It merges three things:
 | `app-live.js` | mounts the 3D body, picks the heart-rate source, runs the live pulse tab, registers the service worker |
 | `ppg-core.js` | PPG processing and quality score; `FACE_CONFIG` and the `POS` filter for face scans |
 | `ppg-inputs.js` | camera, face camera, accelerometer, Bluetooth heart rate, fingertip and face simulators |
+| `resp-core.js` | breathing rate from the camera signals, and the HRV calm/stressed reading |
 | `gemini-wear.js` | live Gemini analysis card on the *My wearables* tab (bring-your-own API key) |
 | `pcg-core.js` | heart sounds from the microphone: processing, quality score, heart-to-fingertip timing, simulator |
 | `vendor/body3d.js` | **generated**: three.js + Plethscape anatomy + `tools/body3d/viewer.js`, one ES module |
@@ -167,6 +168,29 @@ Synthetic results (`node test.mjs`): within ~1.5 bpm from 50 to 150 bpm; HRV mat
 consistent; talking, loose contact, rubbing and phone off the chest are flagged; heart-to-finger timing reads 190 ms
 for a true 200 ms. It counts beats and shows the two sounds; it can't detect murmurs or valve problems, and it isn't a
 medical device.
+
+## Breathing rate, pulse on the face, and calm or stressed
+
+Three extras on the Live pulse check tab, all from signals the app already reads:
+
+- **Breathing rate** (tile next to HRV). Fingertip: each breath shifts blood volume in the finger, so the light level
+  under the pulse rises and falls with it. Face: the head rises and falls slightly with each breath (tracked face
+  position). The face's brightness is not used: camera exposure drift looks like breathing and gave confident wrong
+  rates in testing. The signal is averaged into 0.25 s bins over 32 s and the strongest rhythm between 6 and 36
+  breaths/min wins; quality is the share of that band's power at the peak (good ≥ 50%, fair ≥ 40%). Any hand or head
+  movement in more than 10% of the window withholds the estimate. Needs about 20 s of stillness.
+- **Pulse on the face** (Face mode, on by default). The colour change from each heartbeat, which POS already
+  extracts, is band-passed (0.7–3.5 Hz), scaled to its running size and painted as a red flush over the skin pixels the
+  tracker found, so the face visibly flushes with every beat. It only shows while the signal is good or fair.
+- **Calm or stressed? From HRV.** Places the live RMSSD (chest strap beat-to-beat intervals first, else the fingertip)
+  on a 10–100 ms log scale from "aroused or stressed" to "relaxed". **Set my calm baseline** stores the median of the
+  last 30 s, and the card then shows the change from it (last 20 s median), which says more than the absolute number.
+  Face video is too coarse for beat timing, so face mode asks for a fingertip or strap.
+
+Tests (`node test.mjs`): breathing within 0.1/min from 8 to 28 breaths/min on simulated fingertip and face; movement
+and a missing finger or face are withheld. A synthetic face video (skin colour pulsing at 66 bpm, head moving at
+15 breaths/min) through the real camera path read 66 bpm and 15/min, with the flush visible at each beat. Real people
+are noisier than either, so tune `RESP_CONFIG` on real phones. Learning tools, not medical measurements.
 
 ## Hooks
 

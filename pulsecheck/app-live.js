@@ -10,6 +10,7 @@
 import { PPGProcessor, CONFIG, FACE_CONFIG, POS } from "./ppg-core.js";
 import { startCamera, startFaceCamera, startMic, startMotion, connectHeartRate, Simulator, FaceSimulator } from "./ppg-inputs.js";
 import { PCGProcessor, StethoscopeSimulator, heartToFinger } from "./pcg-core.js";
+import { RespEstimator, RESP_CONFIG, hrvState } from "./resp-core.js";
 
 const $ = (id) => document.getElementById(id);
 const BIO = (window.BIO ||= {});
@@ -96,6 +97,9 @@ let proc = new PPGProcessor(), pos = new POS(), cam = null, motion = null, simTi
 let mic = null, patProc = null, patSim = false;       // heart sounds; fingertip pulse used for heart-to-finger timing
 const patS1 = [], patPulse = [];                      // recent S1 and fingertip pulse times (s)
 const history = [];
+let resp = new RespEstimator(), accelMag = 0, lastResp = 0;   // breathing rate from the same camera signals
+const hrvLog = [];                                          // [t, rmssd ms, source] for the stress gauge baseline
+let hrvBaseline = null;
 const watchRR = [];                // [t, rr seconds] from straps that send RR intervals
 
 function renderComps() {
@@ -109,6 +113,8 @@ function reset() {
   patProc = null; patSim = false; patS1.length = 0; patPulse.length = 0; $("pcPatOut").textContent = "";
   $("pcLog").innerHTML = `<li><span class="note">No artifacts yet.</span></li>`;
   $("pcScan").hidden = true;
+  resp = new RespEstimator(); accelMag = 0; lastResp = 0; $("pcResp").textContent = "—"; $("pcResp").title = "";
+  blushF = null; clearBlush();
 }
 function setBadge(s) { $("pcBadge").dataset.s = s; $("pcBadgeT").textContent = s === "nofinger" ? M.absent : STATUS_TEXT[s] || s; }
 function stopAll() {
@@ -122,6 +128,7 @@ function stopAll() {
 }
 function setMode(m) {
   if (m === mode) return;
+  $("pcBlushRow").hidden = m !== "face";
   stopAll(); mode = m; M = MODES[m]; COMP_LABELS = M.comps;
   reset(); renderComps();
   document.querySelectorAll("#pcMode [data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
@@ -140,9 +147,47 @@ document.querySelectorAll("#pcMode [data-mode]").forEach((b) => (b.onclick = () 
 /** One face frame (camera or simulator) into the processor: skin colour -> POS pulse -> quality score. */
 function feedFace(f, headMotion) {
   proc.pushMotion(f.t, headMotion);
-  if (!f.present || f.dark) { pos = new POS(); proc.pushPPG(f.t, 1, { clip: f.clip, finger: false, note: f.note }); return; }
+  resp.push(f.t, { position: f.position }, f.present && !f.dark, headMotion > RESP_CONFIG.faceMoving);   // breathing from head movement
+  if (!f.present || f.dark) { pos = new POS(); proc.pushPPG(f.t, 1, { clip: f.clip, finger: false, note: f.note }); drawBlush(f, null); return; }
   const h = pos.push(f.t, f.r, f.g, f.b);
   if (h != null) proc.pushPPG(f.t, 1 - h, { clip: f.clip, finger: true });
+  drawBlush(f, h);
+}
+/** One fingertip frame (camera or simulator): pulse processor plus breathing from the light level. */
+function feedFinger(f) {
+  proc.pushPPG(f.t, f.r, f);
+  resp.push(f.t, { intensity: f.r }, f.finger, accelMag > RESP_CONFIG.fingerMoving);
+}
+
+// ---------------- micro-blush: each heartbeat's colour change, amplified and painted back on the face ----------------
+// The pulse in facial skin changes its colour by well under 1%, invisible to the eye. POS already extracts it; here it
+// is band-passed (0.7-3.5 Hz, causal so there's no delay), scaled to its running size, and drawn as a red flush over
+// the skin pixels the tracker found. Only shown while the signal is good or fair, so it never animates noise.
+let blushF = null;
+function biq(type, f0, fs) {
+  const w0 = (2 * Math.PI * f0) / fs, c = Math.cos(w0), al = Math.sin(w0) / Math.SQRT2, a0 = 1 + al;
+  const b = type === "low" ? [(1 - c) / 2, 1 - c, (1 - c) / 2] : [(1 + c) / 2, -(1 + c), (1 + c) / 2];
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  return (x) => { const y = (b[0] * x + b[1] * x1 + b[2] * x2 + 2 * c * y1 - (1 - al) * y2) / a0; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; };
+}
+function clearBlush() { const cv = $("pcBlush"); cv?.getContext("2d").clearRect(0, 0, cv.width, cv.height); }
+function drawBlush(f, h) {
+  const cv = $("pcBlush");
+  if (!cv || !f.skin || !$("pcBlushOn").checked) { if (cv && !$("pcBlushOn").checked) clearBlush(); return; }
+  if (h == null) { clearBlush(); return; }
+  if (!blushF) blushF = { hp: biq("high", 0.7, 30), lp: biq("low", 3.5, 30), ms: 1e-6, n: 0, img: null, off: document.createElement("canvas") };
+  const B = blushF, y = B.lp(B.hp(h));
+  B.ms += (y * y - B.ms) * 0.02; B.n++;
+  const st = proc.last?.status, gate = st === "good" ? 1 : st === "fair" ? 0.6 : 0;
+  const z = B.n > 60 ? y / Math.sqrt(B.ms) : 0;
+  const a = gate * Math.max(0, Math.min(1, z / 2.2)) * 0.55;
+  if (B.off.width !== f.w || B.off.height !== f.h) { B.off.width = f.w; B.off.height = f.h; B.img = B.off.getContext("2d").createImageData(f.w, f.h); }
+  const d = B.img.data, A = Math.round(a * 255);
+  for (let i = 0; i < f.skin.length; i++) { const k = i * 4; d[k] = 255; d[k + 1] = 40; d[k + 2] = 70; d[k + 3] = f.skin[i] ? A : 0; }
+  B.off.getContext("2d").putImageData(B.img, 0, 0);
+  const w = cv.clientWidth, hh = cv.clientHeight;
+  if (cv.width !== w || cv.height !== hh) { cv.width = w; cv.height = hh; }
+  const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, w, hh); ctx.imageSmoothingEnabled = true; ctx.drawImage(B.off, 0, 0, w, hh);
 }
 const clockNow = () => (sim ? sim.t : nowS());
 function startLoop() { clearInterval(timer); timer = setInterval(() => update(proc.compute(clockNow())), 400); }
@@ -184,8 +229,8 @@ $("pcCam").onclick = async () => {
     return;
   }
   try {
-    motion = await startMotion(({ t, mag }) => proc.pushMotion(t, mag)); // ask first: iPhone needs the tap
-    cam = await startCamera($("pcVideo"), (f) => proc.pushPPG(f.t, f.r, f));
+    motion = await startMotion(({ t, mag }) => { proc.pushMotion(t, mag); accelMag = mag; }); // ask first: iPhone needs the tap
+    cam = await startCamera($("pcVideo"), feedFinger);
     $("pcCamNote").textContent = cam.torch ? "Flash on. Cover the lens and flash completely and press lightly." : "Couldn't turn on the flash. Hold your finger toward a bright light.";
     $("pcStop").disabled = false; $("pcCam").disabled = true;
     BIO.selectOrgan?.("finger");
@@ -206,7 +251,7 @@ $("pcSim").onclick = () => {
     for (let i = 0; i < 3; i++) {
       const s = sim.step();
       if (face) feedFace(s.face, s.motion.mag);
-      else { proc.pushPPG(s.ppg.t, s.ppg.r, s.ppg); proc.pushMotion(s.motion.t, s.motion.mag); }
+      else { proc.pushMotion(s.motion.t, s.motion.mag); accelMag = s.motion.mag; feedFinger(s.ppg); }
     }
   }, 100);
   if (face) { $("pcFaceHint").hidden = false; $("pcFaceHint").textContent = "Simulated face: the camera is off"; scan = { start: sim.t, done: false }; $("pcScan").hidden = false; }
@@ -298,8 +343,58 @@ $("pcWatch").onclick = async () => {
   }
 };
 
+// ---------------- breathing tile ----------------
+function updateBreathing(t) {
+  if (t - lastResp < 1) return; lastResp = t;
+  const b = resp.compute(t), el = $("pcResp");
+  BIO.breathing = b;
+  if (b.rate) { el.innerHTML = `${Math.round(b.rate)}<small>/min</small>`; el.classList.toggle("stale", b.status !== "good"); }
+  else el.textContent = "—";
+  el.title = b.rate ? `Breathing rate from ${b.source === "position" ? "the tiny rise and fall of your head" : "the light level under the pulse (blood volume shifts with each breath)"} · ${b.status} signal` : b.reason;
+  $("pcRespNote").textContent = b.rate ? (b.source === "position" ? "from head movement" : "from light level") : b.status === "warming" ? "needs ~20 s still" : "unclear";
+}
+
+// ---------------- calm or stressed? (HRV) ----------------
+// RMSSD, the typical change between one beat interval and the next, is mostly set by the vagus nerve ("rest and
+// digest") braking the heart and letting go with each breath. Stress, effort or excitement tighten that control, so
+// the intervals become more even and RMSSD falls. Sources, best first: a chest strap's beat-to-beat intervals, then
+// the fingertip camera (face video is too coarse for beat timing).
+function currentHrv() {
+  const w = watchRmssd(); if (w) return { v: w, src: LIVE.watch?.name || "chest strap" };
+  const r = proc.last?.rmssd; if (r && mode === "finger" && (cam || sim)) return { v: r, src: sim ? "simulated fingertip" : "fingertip camera" };
+  return null;
+}
+const medianOf = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
+function updateStress(t) {
+  const raw = currentHrv();
+  if (raw) { hrvLog.push([t, raw.v]); while (hrvLog.length && hrvLog[0][0] < t - 120) hrvLog.shift(); }
+  // compare like with like: the last 20 s of readings against the baseline (the median of a calm 30 s)
+  const h = raw && { ...raw, v: medianOf(hrvLog.filter(([x]) => x > t - 20).map(([, y]) => y)) ?? raw.v };
+  const st = h ? hrvState(h.v, hrvBaseline) : null;
+  $("stBase").disabled = !h || hrvLog.filter(([x]) => x > t - 30).length < 20;
+  if (!st) {
+    $("stMark").hidden = true; $("stVal").textContent = "—";
+    $("stLabel").textContent = mode === "face" && (cam || sim) ? "HRV needs beat-to-beat timing: switch to Fingertip, or connect a chest strap." : "Waiting for about a minute of clean beats from the fingertip camera or a chest strap.";
+    $("stBaseT").textContent = hrvBaseline ? `Baseline ${Math.round(hrvBaseline)} ms` : "";
+    return;
+  }
+  $("stMark").hidden = false; $("stMark").style.left = `${(st.level * 100).toFixed(1)}%`;
+  $("stVal").innerHTML = `${Math.round(h.v)}<small> ms RMSSD · ${esc(h.src)}</small>`;
+  const b = BIO.breathing, slow = b?.rate && b.rate < 9;
+  $("stLabel").textContent = st.label + (slow ? ". Slow breathing raises HRV on its own, so part of this is your breathing." : ".");
+  $("stBaseT").textContent = st.vsBaseline == null ? "Set a baseline while calm, then watch how it changes."
+    : `${st.vsBaseline > 0 ? "+" : ""}${st.vsBaseline}% vs your baseline (${Math.round(hrvBaseline)} ms): ${Math.abs(st.vsBaseline) < 10 ? "about the same" : st.vsBaseline > 0 ? "more relaxed than then" : "more aroused than then"}.`;
+  BIO.hrvState = { rmssd_ms: Math.round(h.v), source: h.src, reading: st.label, vs_baseline_pct: st.vsBaseline };
+}
+$("stBase").onclick = () => {
+  const t = clockNow(), v = medianOf(hrvLog.filter(([x]) => x > t - 30).map(([, y]) => y));
+  if (v) { hrvBaseline = v; updateStress(t); }
+};
+
 $("pcCopy").onclick = async () => {
   const s = proc.summary();
+  if (BIO.breathing?.rate) s.breathing_per_min = { rate: Math.round(BIO.breathing.rate), from: BIO.breathing.source === "position" ? "head movement (face camera)" : "light level (fingertip camera)", quality: BIO.breathing.status };
+  if (BIO.hrvState) s.hrv_calm_or_stressed = BIO.hrvState;
   if (scan?.result) s.face_scan_30s = scan.result;
   if (mode === "sound" && BIO.pat) s.heart_to_fingertip_ms = { median: BIO.pat.ms, beats: BIO.pat.n, note: "S1 to fingertip pulse peak; phone audio and camera clocks can differ by tens of ms" };
   if (LIVE.watch) s.watch_live = { device: LIVE.watch.name, bpm: LIVE.watch.bpm, hrv_rmssd_ms: watchRmssd() && Math.round(watchRmssd()) };
@@ -329,6 +424,7 @@ function update(r) {
   // camera heart rate drives the 3D heart only while it is trustworthy
   if (r.hr && !r.hrStale && (r.status === "good" || r.status === "fair")) LIVE.cam = { bpm: r.hr, t: nowS(), label: sim ? M.simLabel : M.label };
   if (scan && !scan.done) updateScan(r);
+  updateBreathing(r.t); updateStress(r.t);
 
   $("pcCamHr").textContent = r.hr && !r.hrStale ? Math.round(r.hr) : "--";
   $("pcCamVerdict").textContent = STATUS_TEXT[r.status];

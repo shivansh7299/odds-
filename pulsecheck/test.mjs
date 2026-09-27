@@ -94,3 +94,27 @@ for (const a of ["motion", "weak", "press", "nofinger"]) {
   const res = heartToFinger([...new Set(s1.map((t) => Math.round(t * 100) / 100))], pulses, 10);
   console.log(`heart-to-finger timing: ${res ? res.ms + " ms over " + res.n + " beats" : "none"} (true 200 ms)`);
 }
+
+// ---------------- breathing rate from the camera signals ----------------
+import { RespEstimator, RESP_CONFIG, hrvState } from "./resp-core.js";
+function runResp({ kind = "finger", rr = 15, hr = 72, artifact = "none", secs = 60, seed = 11 }) {
+  const Sim = kind === "finger" ? Simulator : FaceSimulator, sim = new Sim({ hr, rr, seed }), est = new RespEstimator(); const out = []; let next = 0;
+  for (let i = 0; i < secs * 30; i++) {
+    if (sim.t > 30) sim.artifact = artifact;
+    const s = sim.step();
+    if (kind === "finger") est.push(s.ppg.t, { intensity: s.ppg.r }, s.ppg.finger, s.motion.mag > RESP_CONFIG.fingerMoving);
+    else est.push(s.face.t, { position: s.face.position }, s.face.present && !s.face.dark, s.motion.mag > RESP_CONFIG.faceMoving);   // face: head movement only
+    if (sim.t >= next) { next += 1; out.push(est.compute(sim.t)); }
+  }
+  return out;
+}
+console.log("== breathing rate (last 20 s of a 60 s run)");
+for (const kind of ["finger", "face"]) for (const rr of [8, 12, 15, 20, 28]) {
+  const out = runResp({ kind, rr }).filter((r) => r.t > 40), v = out.filter((r) => r.rate != null), err = v.map((r) => Math.abs(r.rate - rr));
+  console.log(`${kind} ${rr}/min: mean |err| ${(err.reduce((a, b) => a + b, 0) / (err.length || 1)).toFixed(2)}, max ${err.length ? Math.max(...err).toFixed(2) : "-"}, ${stat(out.map((r) => r.status))}, via ${out.at(-1).source}`);
+}
+for (const [kind, a] of [["finger", "motion"], ["finger", "nofinger"], ["face", "motion"], ["face", "nofinger"]]) {
+  const out = runResp({ kind, artifact: a, secs: 75 }).filter((r) => r.t > 65);
+  console.log(`${kind} + ${a}: ${stat(out.map((r) => r.status))}; ${out.at(-1).reason || "rate " + out.at(-1).rate?.toFixed(1)}`);
+}
+console.log(`HRV gauge: 12 ms -> ${hrvState(12).label} (${hrvState(12).level.toFixed(2)}); 60 ms -> ${hrvState(60).label} (${hrvState(60).level.toFixed(2)}); 40 ms vs baseline 50 -> ${hrvState(40, 50).vsBaseline}%`);
