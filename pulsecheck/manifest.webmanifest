@@ -1,7 +1,7 @@
 {
-  "name": "Biosignal Teaching Scope",
-  "short_name": "Bio Scope",
-  "description": "3D body, live pulse from camera or watch, EEG teaching scope and wearable insights.",
+  "name": "Body Sense",
+  "short_name": "Body Sense",
+  "description": "Know your vitals and understand your body. 3D body, live pulse from camera or watch, EEG teaching scope and wearable insights.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

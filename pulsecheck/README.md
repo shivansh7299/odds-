@@ -1,4 +1,8 @@
-# Biosignal Teaching Scope + Pulse Check
+# Body Sense
+
+Know your vitals and understand your body.
+
+_Built from the Biosignal Teaching Scope + Pulse Check._
 
 A neuroscience teaching app built around a 3D body. It merges three things:
 
