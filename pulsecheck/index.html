@@ -267,6 +267,10 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .faceHint{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:#E4ECE9;font-size:13px;padding-inline:10px}
 #pcFaceNote{margin-top:8px}
 .scan{margin-top:10px}
+#pcPcg{height:130px}
+#pcSoundView{display:flex;flex-direction:column;gap:6px}
+#pcSoundView .chk{display:flex;gap:7px;align-items:center}
+#pcPatOut b{color:var(--ink)}
 .scan .bar{display:block}
 .scan p{margin:6px 0 0}
 #pcScanT b{color:var(--ink)}
@@ -610,7 +614,7 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
         <div class="scopeBar">
           <h2 id="pcTitle">Fingertip pulse</h2>
           <div class="ctrls">
-            <span class="seg" id="pcMode" role="group" aria-label="Where to measure"><button type="button" data-mode="finger" aria-pressed="true">Fingertip</button><button type="button" data-mode="face" aria-pressed="false">Face</button></span>
+            <span class="seg" id="pcMode" role="group" aria-label="Where to measure"><button type="button" data-mode="finger" aria-pressed="true">Fingertip</button><button type="button" data-mode="face" aria-pressed="false">Face</button><button type="button" data-mode="sound" aria-pressed="false">Heart sounds</button></span>
             <button class="btn primary" id="pcCam" type="button">Start camera</button>
             <button class="btn" id="pcSim" type="button" aria-pressed="false">Simulated signal</button>
             <button class="btn" id="pcStop" type="button" disabled>Stop</button>
@@ -641,7 +645,7 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
           <input id="pcSimHr" type="range" min="45" max="170" value="72">
         </div>
         <div class="card">
-          <h3>Camera</h3>
+          <h3 id="pcSensorH">Camera</h3>
           <div class="faceView" id="pcFaceView" hidden>
             <video id="pcFaceVideo" playsinline muted></video>
             <canvas id="pcFaceOverlay" aria-hidden="true"></canvas>
@@ -649,6 +653,13 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
           </div>
           <p class="note" id="pcFaceNote" hidden>Front camera, no contact. Face a window or lamp so your face is evenly lit, hold the phone steady, keep still and don't talk. Every frame is analysed on this device and never stored or sent. Heart rate only: for HRV use a fingertip reading or a chest strap.</p>
           <div class="scan" id="pcScan" hidden><span class="bar"><i id="pcScanFill" style="width:0%"></i></span><p class="note" id="pcScanT"></p></div>
+          <div id="pcSoundView" hidden>
+            <div class="wrap"><canvas id="pcPcg" aria-label="Heart sound waveform, last 3 seconds, with lub and dub marked"></canvas></div>
+            <label class="note chk"><input type="checkbox" id="pcListen"> Play through headphones (not the speaker: it would feed back)</label>
+            <label class="note chk"><input type="checkbox" id="pcPat"> Also time the pulse to a fingertip on the rear camera</label>
+            <p class="note" id="pcPatOut" aria-live="polite"></p>
+            <p class="note">For learning only: this counts beats and shows the two heart sounds. It can't detect murmurs or valve problems, and it isn't a medical device.</p>
+          </div>
           <div class="camRow" id="pcFingerCam"><video id="pcVideo" playsinline muted></video><span class="note" id="pcCamNote">Rear camera with flash works best. iPhone Safari can't turn the flash on from a web page, so hold your finger toward a bright light.</span></div>
         </div>
       </aside>

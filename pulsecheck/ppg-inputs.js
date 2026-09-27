@@ -3,6 +3,7 @@
  *   startCamera(video, onFrame)   fingertip-over-camera PPG (needs HTTPS or localhost)
  *   startFaceCamera(video, overlay, onFrame)
  *                                 front camera, no contact: tracks the face and averages forehead + cheek skin
+ *   startMic(onAudio)             microphone for heart sounds, raw (no echo cancelling / noise suppression / auto gain)
  *   startMotion(onSample)         phone accelerometer, gravity removed (call from a button tap on iPhone)
  *   connectHeartRate(onBpm)       any Bluetooth heart-rate broadcaster: Garmin "Broadcast Heart Rate",
  *                                 chest straps, or an Apple Watch via a broadcast app (Chrome/Edge, not iOS)
@@ -163,6 +164,67 @@ export function drawFaceOverlay(cv, f) {
   ctx.fillStyle = "rgba(92,203,131,0.22)";
   const box = (ax, ay, bx, by) => ctx.fillRect((cx + ax * rx) * sx, (cy + ay * ry) * sy, (bx - ax) * rx * sx, (by - ay) * ry * sy);
   box(-0.55, -0.78, 0.55, -0.37); box(-0.72, 0.07, -0.27, 0.48); box(0.27, 0.07, 0.72, 0.48);
+}
+
+// ---------------- microphone (heart sounds) ----------------
+// A tiny AudioWorklet hands raw samples to the page in ~2048-sample chunks, time-stamped on the same clock as the
+// camera frames (performance.now), so heart sounds can be lined up with the fingertip pulse.
+const TAP = `class Tap extends AudioWorkletProcessor {
+  constructor() { super(); this.b = new Float32Array(8192); this.n = 0; this.t0 = 0; }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (ch) {
+      if (this.n === 0) this.t0 = currentTime;
+      this.b.set(ch, this.n); this.n += ch.length;
+      if (this.n >= 2048) { this.port.postMessage({ t0: this.t0, s: this.b.slice(0, this.n) }); this.n = 0; }
+    }
+    return true;
+  }
+}
+registerProcessor("pc-tap", Tap);`;
+
+export async function startMic(onAudio, { listen = false } = {}) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) throw new Error("This browser has no Web Audio support");
+  const ctx = new Ctx();                        // created inside the button tap, as iPhones require
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: false,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (e) { ctx.close(); throw e; }
+  if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+  const src = ctx.createMediaStreamSource(stream);
+  const toPerf = (ctxTime) => {
+    const ts = ctx.getOutputTimestamp?.();
+    return ts && ts.performanceTime ? ts.performanceTime / 1000 - (ts.contextTime - ctxTime) : now() - (ctx.currentTime - ctxTime);
+  };
+  const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination);   // keeps the tap running, silently
+  let node;
+  if (ctx.audioWorklet && typeof AudioWorkletNode !== "undefined") {
+    const url = URL.createObjectURL(new Blob([TAP], { type: "application/javascript" }));
+    try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+    node = new AudioWorkletNode(ctx, "pc-tap");
+    node.port.onmessage = (e) => onAudio({ t0: toPerf(e.data.t0), samples: e.data.s, sampleRate: ctx.sampleRate });
+  } else {                                      // older browsers
+    node = ctx.createScriptProcessor(2048, 1, 1);
+    node.onaudioprocess = (e) => { const s = e.inputBuffer.getChannelData(0).slice(); onAudio({ t0: toPerf(ctx.currentTime - s.length / ctx.sampleRate), samples: s, sampleRate: ctx.sampleRate }); };
+  }
+  src.connect(node); node.connect(sink);
+  // "Listen": the heart band (25-300 Hz), boosted, to headphones. Through the speaker it would feed back.
+  let mon = null;
+  const setListen = (on) => {
+    if (on && !mon) {
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 25;
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 300;
+      const g = ctx.createGain(); g.gain.value = 6;
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ctx.destination); mon = { hp, g };
+    } else if (!on && mon) { src.disconnect(mon.hp); mon.g.disconnect(); mon = null; }
+  };
+  setListen(listen);
+  return {
+    sampleRate: ctx.sampleRate, setListen,
+    stop() { setListen(false); stream.getTracks().forEach((t) => t.stop()); try { node.disconnect(); src.disconnect(); } catch { /* already */ } ctx.close(); },
+  };
 }
 
 // ---------------- motion ----------------

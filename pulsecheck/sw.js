@@ -2,7 +2,7 @@
 // App code: network first (so updates show up), cache as fallback.
 // 3D models and vendor bundle: cache first (about 11 MB, downloaded once).
 const CACHE = "bioscope-v5";
-const SHELL = ["./", "index.html", "app-live.js", "ppg-core.js", "ppg-inputs.js", "gemini-wear.js", "manifest.webmanifest", "icon.svg"];
+const SHELL = ["./", "index.html", "app-live.js", "ppg-core.js", "ppg-inputs.js", "gemini-wear.js", "pcg-core.js", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
