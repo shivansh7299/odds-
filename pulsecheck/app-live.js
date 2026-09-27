@@ -3,11 +3,13 @@
  *   - mounts the Plethscape 3D body (vendor/body3d.js) into the body map, with the SVG as fallback
  *   - decides what drives the 3D heart: a Bluetooth watch, your fingertip camera, or the teaching simulator
  *   - runs the "Live pulse check" tab (camera PPG + quality score, artifact log, watch comparison)
- *     in two modes: fingertip over the rear camera, or a contactless face scan with the front camera
+ *     in three modes: fingertip over the rear camera, a contactless face scan with the front camera, or heart
+ *     sounds through the microphone pressed to the chest (optionally timed against a fingertip pulse)
  * The teaching scope (classic script in index.html) shares state through window.BIO.
  */
 import { PPGProcessor, CONFIG, FACE_CONFIG, POS } from "./ppg-core.js";
-import { startCamera, startFaceCamera, startMotion, connectHeartRate, Simulator, FaceSimulator } from "./ppg-inputs.js";
+import { startCamera, startFaceCamera, startMic, startMotion, connectHeartRate, Simulator, FaceSimulator } from "./ppg-inputs.js";
+import { PCGProcessor, StethoscopeSimulator, heartToFinger } from "./pcg-core.js";
 
 const $ = (id) => document.getElementById(id);
 const BIO = (window.BIO ||= {});
@@ -77,11 +79,21 @@ const MODES = {
     comps: { template: "Beat shape", clarity: "Pulse clarity", rhythm: "Rhythm", perfusion: "Skin signal", motion: "Head stillness" },
     arts: { none: "Clean", motion: "Head motion", weak: "Dim room", press: "Glare", nofinger: "Face away" },
   },
+  sound: {
+    title: "Heart sounds", start: "Start listening", camName: "Microphone", organ: "heart",
+    label: "your heart sounds", simLabel: "the simulated heart sounds", absent: "No heart sounds",
+    idle: `Sit quietly, and press the bottom edge of the phone (the microphone) on bare skin just left of the breastbone. Press <b style="color:inherit">Start listening</b> and hold still. With headphones you can hear it too.`,
+    clean: "Clean signal. Each dot is S1, the \"lub\" of the heart's valves closing as it contracts; the 3D heart beats at your rate.",
+    comps: { clarity: "Beat clarity", rhythm: "Rhythm", contact: "Stands out", steady: "No rubbing" },
+    arts: { none: "Clean", motion: "Talking", weak: "Loose contact", press: "Rubbing", nofinger: "Off the chest" },
+  },
 };
 const SCAN_SECONDS = 30;
 let mode = "finger", M = MODES.finger, COMP_LABELS = M.comps;
 const STATUS_TEXT = { good: "Good signal", fair: "Fair signal", poor: "Unreliable", nofinger: "No finger", warming: "Settling…", idle: "Not started" };
 let proc = new PPGProcessor(), pos = new POS(), cam = null, motion = null, simTimer = null, sim = null, timer = null, watchDev = null, scan = null;
+let mic = null, patProc = null, patSim = false;       // heart sounds; fingertip pulse used for heart-to-finger timing
+const patS1 = [], patPulse = [];                      // recent S1 and fingertip pulse times (s)
 const history = [];
 const watchRR = [];                // [t, rr seconds] from straps that send RR intervals
 
@@ -92,13 +104,14 @@ function renderComps() {
 renderComps();
 
 function reset() {
-  proc = new PPGProcessor(mode === "face" ? FACE_CONFIG : {}); pos = new POS(); history.length = 0; scan = null;
+  proc = mode === "sound" ? new PCGProcessor() : new PPGProcessor(mode === "face" ? FACE_CONFIG : {}); pos = new POS(); history.length = 0; scan = null;
+  patProc = null; patSim = false; patS1.length = 0; patPulse.length = 0; $("pcPatOut").textContent = "";
   $("pcLog").innerHTML = `<li><span class="note">No artifacts yet.</span></li>`;
   $("pcScan").hidden = true;
 }
 function setBadge(s) { $("pcBadge").dataset.s = s; $("pcBadgeT").textContent = s === "nofinger" ? M.absent : STATUS_TEXT[s] || s; }
 function stopAll() {
-  cam?.stop(); cam = null; motion?.stop(); motion = null;
+  cam?.stop(); cam = null; motion?.stop(); motion = null; mic?.stop(); mic = null;
   clearInterval(simTimer); simTimer = null; clearInterval(timer); timer = null; sim = null;
   LIVE.cam = null;
   $("pcSimCard").hidden = true; $("pcSim").setAttribute("aria-pressed", "false");
@@ -113,8 +126,9 @@ function setMode(m) {
   document.querySelectorAll("#pcMode [data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
   $("pcTitle").textContent = M.title; $("pcCam").textContent = M.start; $("pcCamName").textContent = M.camName;
   $("pcReason").innerHTML = M.idle;
-  const face = m === "face";
-  $("pcFaceView").hidden = !face; $("pcFaceNote").hidden = !face; $("pcFingerCam").hidden = face;
+  const face = m === "face", sound = m === "sound";
+  $("pcFaceView").hidden = !face; $("pcFaceNote").hidden = !face; $("pcFingerCam").hidden = face || sound;
+  $("pcSoundView").hidden = !sound; $("pcSensorH").textContent = sound ? "Microphone" : "Camera";
   document.querySelectorAll("#pcSimCard [data-art]").forEach((b) => (b.textContent = M.arts[b.dataset.art]));
   ["pcHr", "pcRmssd", "pcScore", "pcFps"].forEach((id) => ($(id).textContent = "—"));
   $("pcRmssd").title = face ? "HRV needs a fingertip reading or a chest strap: beat timing from face video is too coarse." : "";
@@ -134,6 +148,25 @@ function startLoop() { clearInterval(timer); timer = setInterval(() => update(pr
 
 $("pcCam").onclick = async () => {
   stopAll(); reset();
+  if (mode === "sound") {
+    try {
+      mic = await startMic(({ t0, samples, sampleRate }) => proc.pushAudio(t0, samples, sampleRate), { listen: $("pcListen").checked });
+      if ($("pcPat").checked) {
+        patProc = new PPGProcessor();
+        try {
+          cam = await startCamera($("pcVideo"), (f) => patProc.pushPPG(f.t, f.r, f));
+          $("pcFingerCam").hidden = false;
+          $("pcCamNote").textContent = "Fingertip over the rear camera" + (cam.torch ? " and flash" : ", toward a bright light") + ", microphone on the chest.";
+        } catch (e) { patProc = null; $("pcPatOut").textContent = `Fingertip camera unavailable (${e.message}); listening only.`; }
+      }
+      $("pcStop").disabled = false; $("pcCam").disabled = true;
+      BIO.selectOrgan?.("heart");
+      startLoop();
+    } catch (e) {
+      $("pcReason").innerHTML = `<b>Microphone unavailable:</b> ${esc(e.message)}. Open the page over https (or localhost) and allow microphone access.`;
+    }
+    return;
+  }
   if (mode === "face") {
     try {
       cam = await startFaceCamera($("pcFaceVideo"), $("pcFaceOverlay"), (f) => feedFace(f, f.motion));
@@ -162,11 +195,13 @@ $("pcCam").onclick = async () => {
 };
 $("pcSim").onclick = () => {
   stopAll(); reset();
-  const face = mode === "face";
-  sim = new (face ? FaceSimulator : Simulator)({ hr: +$("pcSimHr").value, seed: 7 });
+  const face = mode === "face", sound = mode === "sound";
+  sim = sound ? new StethoscopeSimulator({ hr: +$("pcSimHr").value, sampleRate: 8000, seed: 7 }) : new (face ? FaceSimulator : Simulator)({ hr: +$("pcSimHr").value, seed: 7 });
+  patSim = sound && $("pcPat").checked;
   $("pcSimCard").hidden = false; $("pcSim").setAttribute("aria-pressed", "true"); $("pcStop").disabled = false;
   document.querySelectorAll("#pcSimCard [data-art]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.art === "none")));
   simTimer = setInterval(() => {
+    if (sound) { const c = sim.chunk(0.1); proc.pushAudio(c.t0, c.samples, c.sampleRate); return; }
     for (let i = 0; i < 3; i++) {
       const s = sim.step();
       if (face) feedFace(s.face, s.motion.mag);
@@ -181,6 +216,53 @@ document.querySelectorAll("#pcSimCard [data-art]").forEach((b) => (b.onclick = (
   if (!sim) return; sim.artifact = b.dataset.art;
   document.querySelectorAll("#pcSimCard [data-art]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
 }));
+$("pcListen").onchange = (e) => mic?.setListen(e.target.checked);
+
+/** Heart-to-fingertip timing: collect S1 (microphone) and fingertip pulse peak times, then pair them up. */
+function updatePat(r) {
+  if (mode !== "sound" || !(patProc || patSim)) return;
+  const t = r.t, add = (arr, v) => { if (!arr.length || v - arr[arr.length - 1] > 0.25) arr.push(v); };
+  if (r.status === "good" || r.status === "fair") for (const x of r.s1Times || []) add(patS1, x);
+  if (patSim) {                                            // simulated fingertip: pulse arrives ~200 ms after S1, a little jitter
+    for (const x of sim.s1Times || []) if (x > t - 10) add(patPulse, x + 0.2 + 0.012 * sim.gauss());
+  } else {
+    const p = patProc.compute(t);
+    if (p.status === "good" || p.status === "fair") for (const q of p.peaks) add(patPulse, t - CONFIG.window + q / CONFIG.fs);
+  }
+  for (const a of [patS1, patPulse]) { a.sort((x, y) => x - y); while (a.length && a[0] < t - 60) a.shift(); }
+  const res = heartToFinger(patS1, patPulse, t - 30);
+  BIO.pat = res;
+  $("pcPatOut").innerHTML = res
+    ? `<b>Heart → fingertip: ${res.ms} ms</b> (median of ${res.n} beats${patSim ? ", simulated" : ""}). The time from the valves closing to the pulse peak reaching your finger. It gets shorter when arteries stiffen or blood pressure rises, and longer when you relax. Phone audio and camera clocks can differ by tens of milliseconds, so compare it before and after (a few squats, slow breathing) rather than trusting the absolute number.`
+    : "Heart → fingertip: waiting for clean heart sounds and a clean fingertip pulse at the same time…";
+}
+function drawPcg(r) {
+  const cv = $("pcPcg"); if (!cv || $("pcSoundView").hidden) return;
+  const [ctx, w, h] = fit(cv);
+  ctx.fillStyle = css("--screen"); ctx.fillRect(0, 0, w, h);
+  const { samples, fs, tEnd } = proc.recentSound ? proc.recentSound(3) : {};
+  ctx.fillStyle = "rgba(215,235,228,0.5)"; ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.fillText("heart sound · last 3 s", 6, 12);
+  if (!samples || !tEnd) return;
+  let lim = 1e-6; for (const v of samples) lim = Math.max(lim, Math.abs(v));
+  const mid = h / 2 + 6, amp = (h / 2 - 16) / lim, per = samples.length / w;
+  ctx.strokeStyle = "#7FD6C2"; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 0; x < w; x++) {
+    let lo = Infinity, hi = -Infinity;
+    for (let k = Math.floor(x * per); k < Math.floor((x + 1) * per); k++) { const v = samples[k]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (lo === Infinity) continue;
+    ctx.moveTo(x + 0.5, mid - hi * amp); ctx.lineTo(x + 0.5, mid - lo * amp);
+  }
+  ctx.stroke();
+  const X = (t) => ((t - (tEnd - 3)) / 3) * w;
+  ctx.textAlign = "center"; ctx.font = '600 11px "JetBrains Mono", monospace';
+  if (r?.status === "good" || r?.status === "fair") {
+    for (const t of r.s1Times || []) if (t > tEnd - 3) { ctx.fillStyle = "#FF7A7A"; ctx.fillText("lub", X(t), 24); }
+    for (const t of r.s2Times || []) if (t > tEnd - 3) { ctx.fillStyle = "#E3A43A"; ctx.fillText("dub", X(t), 24); }
+  }
+  ctx.textAlign = "left";
+}
+
 $("pcSimHr").oninput = (e) => { $("pcSimHrV").textContent = e.target.value; if (sim) sim.hr = +e.target.value; };
 
 // ---------------- watch over Bluetooth ----------------
@@ -218,6 +300,7 @@ $("pcWatch").onclick = async () => {
 $("pcCopy").onclick = async () => {
   const s = proc.summary();
   if (scan?.result) s.face_scan_30s = scan.result;
+  if (mode === "sound" && BIO.pat) s.heart_to_fingertip_ms = { median: BIO.pat.ms, beats: BIO.pat.n, note: "S1 to fingertip pulse peak; phone audio and camera clocks can differ by tens of ms" };
   if (LIVE.watch) s.watch_live = { device: LIVE.watch.name, bpm: LIVE.watch.bpm, hrv_rmssd_ms: watchRmssd() && Math.round(watchRmssd()) };
   const text = JSON.stringify(s, null, 2);
   $("pcSummary").textContent = text; $("pcSummary").hidden = false;
@@ -263,7 +346,7 @@ function update(r) {
   }
   window.dispatchEvent(new CustomEvent("ppg:update", { detail: r }));
   history.push([r.t, r.status]); while (history.length && history[0][0] < r.t - 60) history.shift();
-  drawWave(r); drawRibbon(r.t);
+  drawWave(r); drawRibbon(r.t); drawPcg(r); updatePat(r);
 }
 // 30-second face scan: progress while it runs, then a result that stays on screen while the live view continues
 function updateScan(r) {

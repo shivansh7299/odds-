@@ -62,3 +62,35 @@ for (const a of ["motion", "weak", "press", "nofinger"]) {
   const up = r.peaks.map((q) => x[Math.round(q)]).reduce((a, b) => a + b, 0) / r.peaks.length;
   console.log(`face waveform polarity: mean peak height ${up.toFixed(2)} SD (positive = systole up)`);
 }
+
+// ---------------- heart sounds (microphone, phonocardiogram) ----------------
+import { PCGProcessor, StethoscopeSimulator, heartToFinger } from "./pcg-core.js";
+function runSound({ hr = 72, artifact = "none", secs = 40, sampleRate = 4000, seed = 4 }) {
+  const sim = new StethoscopeSimulator({ hr, sampleRate, seed }), p = new PCGProcessor(); const out = []; let next = 0;
+  while (sim.t < secs) {
+    if (sim.t > 12) sim.artifact = artifact;
+    const c = sim.chunk(0.05); p.pushAudio(c.t0, c.samples, c.sampleRate);
+    if (sim.t >= next) { next += 0.5; out.push(p.compute(sim.t)); }
+  }
+  return { out, sim };
+}
+console.log("== heart sounds: clean, HR accuracy (after warm-up)");
+for (const hr of [50, 60, 72, 90, 120, 150]) {
+  const { out } = runSound({ hr });
+  const v = out.filter((r) => r.t > 12 && r.hr && !r.hrStale), err = v.map((r) => Math.abs(r.hr - hr)), last = out.at(-1);
+  console.log(`HR ${hr}: mean |err| ${(err.reduce((a, b) => a + b, 0) / (err.length || 1)).toFixed(2)} bpm, max ${err.length ? Math.max(...err).toFixed(2) : "-"}, quality ${stat(out.filter((r) => r.t > 12).map((r) => r.status))}, lub ${last.s1.length} dub ${last.s2.length}, rmssd ${last.rmssd ? Math.round(last.rmssd) + "ms" : "withheld"}`);
+}
+console.log(`48 kHz input: HR ${runSound({ hr: 72, sampleRate: 48000, secs: 25 }).out.at(-1).hr?.toFixed(1)} (true 72)`);
+console.log("== heart sounds: artifacts");
+for (const a of ["motion", "weak", "press", "nofinger"]) {
+  const { out } = runSound({ artifact: a });
+  const inA = out.filter((r) => r.t > 22);
+  console.log(`${a}: ${stat(inA.map((r) => r.status))}; reason: ${inA.at(-1).reasons[0]}`);
+}
+{ // heart-to-finger timing: fingertip pulse 200 ms after each S1 (plus jitter) comes back as ~200 ms
+  const { sim, out } = runSound({ hr: 66, secs: 30 });
+  const s1 = out.flatMap((r) => r.s1Times || []).filter((t, i, a) => i === 0 || t - a[i - 1] > 0.25).sort((a, b) => a - b);
+  const pulses = sim.s1Times.map((t) => t + 0.2 + 0.01 * sim.gauss());
+  const res = heartToFinger([...new Set(s1.map((t) => Math.round(t * 100) / 100))], pulses, 10);
+  console.log(`heart-to-finger timing: ${res ? res.ms + " ms over " + res.n + " beats" : "none"} (true 200 ms)`);
+}

@@ -25,6 +25,7 @@ A neuroscience teaching app built around a 3D body. It merges three things:
 | `ppg-core.js` | PPG processing and quality score; `FACE_CONFIG` and the `POS` filter for face scans |
 | `ppg-inputs.js` | camera, face camera, accelerometer, Bluetooth heart rate, fingertip and face simulators |
 | `gemini-wear.js` | live Gemini analysis card on the *My wearables* tab (bring-your-own API key) |
+| `pcg-core.js` | heart sounds from the microphone: processing, quality score, heart-to-fingertip timing, simulator |
 | `vendor/body3d.js` | **generated**: three.js + Plethscape anatomy + `tools/body3d/viewer.js`, one ES module |
 | `models/` | **generated**: BodyParts3D atlas, neutral skin, Draco decoder, Plethscape attribution/license |
 | `tools/build-body3d.mjs` | rebuilds `vendor/` and `models/` from Plethscape at a pinned commit |
@@ -115,6 +116,35 @@ Fingertip results are unchanged. Real faces vary with skin tone, lighting and ca
 
 Blood pressure and similar estimates from a face need licensed, validated models (for example Shen.ai, available
 through Thryve's native mobile SDKs under a commercial contract); this app doesn't estimate them.
+
+## Heart sounds (microphone stethoscope)
+
+Pick **Heart sounds** in the Live pulse check tab. Press the bottom edge of the phone (the microphone) on bare skin just
+left of the breastbone, stay quiet, and press **Start listening**. The microphone runs without echo cancelling, noise
+suppression or auto gain. The sound is filtered to the heart band (25–400 Hz), turned into an energy envelope, and:
+
+- the cardiac cycle comes from autocorrelation (both heart sounds repeat one cycle later, so that peak is about twice
+  as tall as the S1-to-S2 cross-peaks), refined below one 10 ms sample;
+- each sound is labelled S1 ("lub", valves closing as the ventricles contract) or S2 ("dub", valves closing as they
+  relax) from the gaps around it (systole is shorter than diastole) and its loudness; the waveform shows the labels;
+- HRV uses S1-to-S1 intervals only while the labels are consistent (one S1 per cycle); otherwise it's withheld.
+
+| Part | What it measures |
+|---|---|
+| Beat clarity | height of the cycle peak in the autocorrelation |
+| Rhythm | each sound recurring one cycle later, and one or two sounds per cycle |
+| Stands out | heart-sound peaks versus the level between them (loose contact and talking both lower it, so they share one message) |
+| No rubbing | clipped samples from rubbing or tapping the phone |
+
+**Play through headphones** lets you hear it (band-limited; the speaker would feed back). **Also time the pulse to a
+fingertip** runs the rear camera too and shows the time from S1 to the fingertip pulse peak, which shortens when arteries
+stiffen or blood pressure rises. Phone audio and camera clocks can differ by tens of milliseconds, so compare it before
+and after (a few squats, slow breathing) rather than trusting the absolute number.
+
+Synthetic results (`node test.mjs`): within ~1.5 bpm from 50 to 150 bpm; HRV matches the fingertip where the labels are
+consistent; talking, loose contact, rubbing and phone off the chest are flagged; heart-to-finger timing reads 190 ms
+for a true 200 ms. It counts beats and shows the two sounds; it can't detect murmurs or valve problems, and it isn't a
+medical device.
 
 ## Hooks
 
