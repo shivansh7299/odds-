@@ -1,0 +1,4 @@
+<properties>
+    <!-- Set this in the Garmin Connect app: Devices → Forerunner → Apps → VitalSync → Settings. -->
+    <property id="serverUrl" type="string">https://hygrophytic-augusta-observedly.ngrok-free.dev</property>
+</properties>

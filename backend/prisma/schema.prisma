@@ -1,0 +1,386 @@
+// VitalSync database schema. See docs/ARCHITECTURE.md for the data model rationale.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+/// Where a piece of data came from. Each value maps to an adapter in src/server/sources.
+enum SourceType {
+  MOCK
+  GARMIN_BLE // Web Bluetooth "Broadcast Heart Rate" from the browser
+  GARMIN_CONNECTIQ // VitalSync Connect IQ watch app posting via the Garmin Connect phone app
+  GARMIN_FIT // FIT file / Garmin Connect export upload
+  GARMIN_HEALTH_API // Reserved: official Garmin Health API (partner approval required)
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  PAUSED
+  NEEDS_REAUTH
+  REVOKED
+  ERROR
+}
+
+enum MetricType {
+  HEART_RATE // bpm
+  RESTING_HEART_RATE // bpm, daily
+  HRV_RMSSD // ms
+  STEPS // count per interval
+  CALORIES // kcal (active) per interval
+  SPO2 // percent
+}
+
+enum SleepStage {
+  AWAKE
+  LIGHT
+  DEEP
+  REM
+}
+
+enum SyncTrigger {
+  LIVE
+  INGEST
+  IMPORT
+  WEBHOOK
+  POLL
+  BACKFILL
+  MANUAL
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// ─── Auth (Better Auth core tables) ─────────────────────────────────────────
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  /// IANA timezone used to bucket daily summaries, e.g. "America/New_York".
+  timezone      String   @default("UTC")
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  sessions      Session[]
+  accounts      Account[]
+  connections   SourceConnection[]
+  ingestDevices IngestDevice[]
+  importJobs    ImportJob[]
+  apiTokens     ApiToken[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime @db.Timestamptz(3)
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─── Sources ────────────────────────────────────────────────────────────────
+
+/// One per (user, source). Holds OAuth tokens only for pull-based sources.
+model SourceConnection {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source         SourceType
+  status         ConnectionStatus @default(ACTIVE)
+  externalUserId String?
+
+  /// AES-256-GCM ciphertext (see src/lib/crypto.ts). Never sent to the client.
+  accessTokenEnc  Bytes?
+  refreshTokenEnc Bytes?
+  encKeyVersion   Int?
+  tokenExpiresAt  DateTime? @db.Timestamptz(3)
+  scopes          String[]
+
+  lastSyncedAt DateTime? @db.Timestamptz(3)
+  /// Timestamp of the newest data point received — drives the "synced X ago" UI.
+  lastDataAt   DateTime? @db.Timestamptz(3)
+  lastError    String?
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+
+  samples        MetricSample[]
+  dailySummaries DailySummary[]
+  sleepSessions  SleepSession[]
+  workouts       Workout[]
+  syncRuns       SyncRun[]
+  ingestDevices  IngestDevice[]
+  importJobs     ImportJob[]
+
+  @@unique([userId, source])
+  @@unique([source, externalUserId])
+  @@map("source_connection")
+}
+
+/// A paired push device (Connect IQ watch app). Only token hashes are stored.
+model IngestDevice {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  name         String
+  model        String?
+
+  /// SHA-256 of the device bearer token. Null until the watch collects it, and after revocation.
+  tokenHash   String? @unique
+  /// First chars of the token, for display ("vs_ab12…").
+  tokenPrefix String?
+
+  lastSeenAt DateTime?      @db.Timestamptz(3)
+  revokedAt  DateTime?      @db.Timestamptz(3)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  pairing    DevicePairing?
+
+  @@index([userId])
+  @@map("ingest_device")
+}
+
+enum PairingStatus {
+  PENDING // watch is showing the code
+  APPROVED // user entered the code; token not yet collected
+  CONSUMED // watch collected its token
+}
+
+/// OAuth-style device authorization (RFC 8628 shape): the watch shows a short
+/// user code, the signed-in user enters it, the watch polls for its token.
+model DevicePairing {
+  id             String        @id @default(cuid())
+  deviceCodeHash String        @unique
+  userCodeHash   String        @unique
+  deviceName     String
+  deviceModel    String?
+  status         PairingStatus @default(PENDING)
+  userId         String?
+  ingestDeviceId String?       @unique
+  ingestDevice   IngestDevice? @relation(fields: [ingestDeviceId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime      @db.Timestamptz(3)
+  lastPolledAt   DateTime?     @db.Timestamptz(3)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("device_pairing")
+}
+
+/// Personal read-only API key for other apps (e.g. the Pulse Check site). Only the hash is stored.
+model ApiToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  lastUsedAt  DateTime? @db.Timestamptz(3)
+  revokedAt   DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("api_token")
+}
+
+// ─── Health data ────────────────────────────────────────────────────────────
+
+/// Time-series core. Upserts are idempotent on (connection, type, ts, resolution).
+model MetricSample {
+  id            BigInt           @id @default(autoincrement())
+  userId        String
+  connectionId  String
+  connection    SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  type          MetricType
+  ts            DateTime         @db.Timestamptz(3)
+  value         Float
+  /// Sampling resolution in seconds (1 = live BLE, 60 = per-minute, 86400 = daily).
+  resolutionSec Int
+
+  @@unique([connectionId, type, ts, resolutionSec])
+  @@index([userId, type, ts(sort: Desc)])
+  @@map("metric_sample")
+}
+
+model DailySummary {
+  connectionId  String
+  connection    SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// Calendar date in the user's timezone.
+  date          DateTime         @db.Date
+  userId        String
+  steps         Int?
+  calories      Int?
+  restingHr     Int?
+  hrvRmssd      Float?
+  spo2Avg       Float?
+  spo2Min       Float?
+  activeMinutes Int?
+  sleepMinutes  Int?
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@id([connectionId, date])
+  @@index([userId, date])
+  @@map("daily_summary")
+}
+
+model SleepSession {
+  id           String           @id @default(cuid())
+  userId       String
+  connectionId String
+  connection   SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId   String
+  startAt      DateTime         @db.Timestamptz(3)
+  endAt        DateTime         @db.Timestamptz(3)
+  score        Int?
+  isMainSleep  Boolean          @default(true)
+  stages       SleepSegment[]
+
+  @@unique([connectionId, externalId])
+  @@index([userId, startAt(sort: Desc)])
+  @@map("sleep_session")
+}
+
+model SleepSegment {
+  id        BigInt       @id @default(autoincrement())
+  sessionId String
+  session   SleepSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  stage     SleepStage
+  startAt   DateTime     @db.Timestamptz(3)
+  seconds   Int
+
+  @@index([sessionId, startAt])
+  @@map("sleep_segment")
+}
+
+model Workout {
+  id           String           @id @default(cuid())
+  userId       String
+  connectionId String
+  connection   SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  externalId   String
+  activityType String
+  startAt      DateTime         @db.Timestamptz(3)
+  durationSec  Int
+  calories     Int?
+  avgHr        Int?
+  maxHr        Int?
+  distanceM    Float?
+  steps        Int?
+
+  @@unique([connectionId, externalId])
+  @@index([userId, startAt(sort: Desc)])
+  @@map("workout")
+}
+
+// ─── Jobs & audit ───────────────────────────────────────────────────────────
+
+model ImportJob {
+  id              String           @id @default(cuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId    String
+  connection      SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  filename        String
+  sizeBytes       Int
+  sha256          String
+  status          JobStatus        @default(QUEUED)
+  recordsUpserted Int              @default(0)
+  error           String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  finishedAt      DateTime?        @db.Timestamptz(3)
+
+  @@unique([userId, sha256])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("import_job")
+}
+
+model SyncRun {
+  id              String           @id @default(cuid())
+  connectionId    String
+  connection      SourceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  trigger         SyncTrigger
+  status          JobStatus        @default(QUEUED)
+  recordsUpserted Int              @default(0)
+  error           String?
+  startedAt       DateTime         @default(now()) @db.Timestamptz(3)
+  finishedAt      DateTime?        @db.Timestamptz(3)
+
+  @@index([connectionId, startedAt(sort: Desc)])
+  @@map("sync_run")
+}
+
+/// Raw inbound webhooks (future Garmin Health API / aggregator), deduplicated.
+model WebhookEvent {
+  id          String     @id @default(cuid())
+  source      SourceType
+  dedupeKey   String     @unique
+  payload     Json
+  receivedAt  DateTime   @default(now()) @db.Timestamptz(3)
+  processedAt DateTime?  @db.Timestamptz(3)
+
+  @@map("webhook_event")
+}
+
+/// Short-lived OAuth state + PKCE verifier for pull-based sources (future).
+model OAuthState {
+  state        String     @id
+  userId       String
+  source       SourceType
+  codeVerifier String
+  expiresAt    DateTime   @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("oauth_state")
+}
