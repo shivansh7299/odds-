@@ -37,6 +37,14 @@ ${digest}`,
   };
 }
 
+// Gemini 2.5 and 3.x models "think" before answering, and thinking tokens count against
+// maxOutputTokens. Keep thinking small so the budget goes to the answer, not the scratchpad.
+function thinkingFor(model) {
+  if (/gemini-2\.5/.test(model)) return { thinkingConfig: { thinkingBudget: /pro/.test(model) ? 256 : 0 } };
+  if (/gemini-[3-9]/.test(model)) return { thinkingConfig: { thinkingLevel: "low" } };
+  return {};
+}
+
 async function analyze({ force = false } = {}) {
   const key = els.key.value.trim(), wear = BIO.wear;
   if (!key || !wear) return;
@@ -57,7 +65,7 @@ async function analyze({ force = false } = {}) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: p.system }] },
         contents: [{ role: "user", parts: [{ text: p.user }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 8192, ...thinkingFor(model) },
       }),
     });
     if (!res.ok) {
@@ -83,7 +91,7 @@ async function analyze({ force = false } = {}) {
       }
     }
     if (!text) throw new Error(finish === "BLOCKED" || finish === "SAFETY" ? "Gemini declined to answer this one." : "No answer came back.");
-    if (finish === "MAX_TOKENS") els.ans.insertAdjacentHTML("beforeend", '<p class="note">The answer was cut short.</p>');
+    if (finish === "MAX_TOKENS") els.ans.insertAdjacentHTML("beforeend", '<p class="note">The answer hit the length limit. Press Analyze to try again, or pick a faster model such as gemini-2.5-flash.</p>');
     setState(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${model}`, "ok");
   } catch (e) {
     if (e.name === "AbortError") { setState("Stopped."); lastDigest = ""; return; }
