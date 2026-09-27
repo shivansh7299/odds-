@@ -97,10 +97,12 @@ export async function startFaceCamera(video, overlay, onFrame) {
   // oval in canvas pixels; starts centred, then follows the skin
   const roi = { cx: W / 2, cy: H * 0.47, rx: W * 0.2, ry: H * 0.34 };
   let running = true, lastTime = -1, prev = null;
+  const mask = new Uint8Array(W * H);                 // skin pixels inside the face oval (for the pulse overlay)
 
   const grab = (t) => {
     ctx.drawImage(video, 0, 0, W, H);
     const d = ctx.getImageData(0, 0, W, H).data;
+    mask.fill(0);
     // 1) find the skin blob near the current oval (search 1.6x wider)
     let sx = 0, sy = 0, sxx = 0, n = 0, inOval = 0, ovalN = 0;
     const x0 = Math.max(0, Math.floor(roi.cx - roi.rx * 1.6)), x1 = Math.min(W, Math.ceil(roi.cx + roi.rx * 1.6));
@@ -108,12 +110,14 @@ export async function startFaceCamera(video, overlay, onFrame) {
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = (y * W + x) * 4, skin = isSkin(d[i], d[i + 1], d[i + 2]);
       const dx = (x - roi.cx) / roi.rx, dy = (y - roi.cy) / roi.ry, inside = dx * dx + dy * dy <= 1;
-      if (inside) { ovalN++; if (skin) inOval++; }
+      if (inside) { ovalN++; if (skin) { inOval++; mask[y * W + x] = 1; } }
       if (skin) { sx += x; sy += y; sxx += x * x; n++; }
     }
-    let move = 0;
+    let move = 0, position = NaN;
     if (n > 30) {
-      const mx = sx / n, my = sy / n, sd = Math.sqrt(Math.max(1, sxx / n - mx * mx));
+      const mx = sx / n, my = sy / n;
+      position = my;                     // vertical position of the face: rises and falls a little with each breath
+      const sd = Math.sqrt(Math.max(1, sxx / n - mx * mx));
       if (prev) move = (100 * Math.hypot(mx - prev[0], my - prev[1])) / (2 * roi.rx);   // % of face width
       prev = [mx, my];
       roi.cx += 0.35 * (mx - roi.cx); roi.cy += 0.35 * (my + roi.ry * 0.05 - roi.cy);
@@ -134,7 +138,7 @@ export async function startFaceCamera(video, overlay, onFrame) {
     if (m) { r /= m; g /= m; b /= m; lum /= m; clip /= m; }
     const dark = present && lum < 50;
     const note = !present ? "Face not found: center your face in the oval, in even light" : dark ? "Too dark: face a window or a lamp" : "";
-    const frame = { t, r, g, b, clip, present, dark, note, motion: move, roi: { ...roi }, w: W, h: H };
+    const frame = { t, r, g, b, clip, present, dark, note, motion: move, position, roi: { ...roi }, w: W, h: H, skin: mask };
     if (overlay) drawFaceOverlay(overlay, frame);
     onFrame(frame);
   };
@@ -273,8 +277,8 @@ export async function connectHeartRate(onBpm) {
 // ---------------- simulator ----------------
 /** Synthetic fingertip PPG with realistic morphology, breathing-linked HR variability, and artifacts. */
 export class Simulator {
-  constructor({ hr = 72, fs = 30, seed = 1 } = {}) {
-    this.hr = hr; this.fs = fs; this.t = 0; this.phase = 0;
+  constructor({ hr = 72, fs = 30, seed = 1, rr = 15 } = {}) {
+    this.hr = hr; this.fs = fs; this.t = 0; this.phase = 0; this.rr = rr;   // rr: breaths per minute
     this.artifact = "none";      // none | motion | weak | press | nofinger
     this.s = seed; this.drift = 0; this.mv = 0;
   }
@@ -283,7 +287,7 @@ export class Simulator {
   /** Advance one frame; returns { ppg: {t,r,clip,finger}, motion: {t,mag} } */
   step() {
     const dt = 1 / this.fs; this.t += dt;
-    const resp = Math.sin(2 * Math.PI * 0.25 * this.t);                 // 15 breaths/min
+    const resp = Math.sin(2 * Math.PI * (this.rr / 60) * this.t);       // breathing (15/min by default)
     const inst = this.hr * (1 + 0.04 * resp);                            // respiratory sinus arrhythmia
     this.phase = (this.phase + (inst / 60) * dt) % 1;
     const p = this.phase;
@@ -319,11 +323,15 @@ export class Simulator {
 export class FaceSimulator extends Simulator {
   step() {
     const dt = 1 / this.fs; this.t += dt;
-    const resp = Math.sin(2 * Math.PI * 0.25 * this.t);
+    const resp = Math.sin(2 * Math.PI * (this.rr / 60) * this.t);
     const inst = this.hr * (1 + 0.04 * resp);
     this.phase = (this.phase + (inst / 60) * dt) % 1;
     const p = this.phase;
     const pulse = Math.exp(-(((p - 0.15) / 0.07) ** 2)) + 0.35 * Math.exp(-(((p - 0.45) / 0.09) ** 2));
+    // head position (analysis-grid pixels): rises and falls a little with each breath; own noise source so the
+    // colour signal stays exactly as before
+    this.s2 = ((this.s2 ?? 99991) * 48271) % 2147483647;
+    const headY = 30 + 0.12 * resp + 0.02 * (this.s2 / 2147483647 - 0.5);
     const skin = [182, 132, 112], sig = [0.33, 0.77, 0.53];   // skin tone (RGB), blood absorption signature
     let light = 1, amp = 0.004, noise = 0.06, glare = 0, present = true, dark = false, clip = 0, mag = Math.abs(0.15 * this.gauss());
     this.drift += 0.0015 * this.gauss(); this.drift *= 0.995;
@@ -342,7 +350,8 @@ export class FaceSimulator extends Simulator {
     }
     light *= 1 + this.drift + 0.004 * resp;
     const [r, g, b] = skin.map((c, k) => Math.min(255, light * c * (1 - amp * pulse * sig[k]) + glare + noise * this.gauss()));
-    return { face: { t: this.t, r, g, b, clip, present, dark, note: !present ? "Face not found: center your face in the oval, in even light" : dark ? "Too dark: face a window or a lamp" : "" },
+    const position = headY + (this.artifact === "motion" ? 6 * this.mv + 15 * (this.jolt || 0) : 0);
+    return { face: { t: this.t, r, g, b, clip, present, dark, position, note: !present ? "Face not found: center your face in the oval, in even light" : dark ? "Too dark: face a window or a lamp" : "" },
       motion: { t: this.t, mag } };
   }
 }
