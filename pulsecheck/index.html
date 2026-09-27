@@ -240,6 +240,14 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .comp .n{text-align:right;font-size:12px;color:var(--muted)}
 .camRow{display:flex;gap:10px;align-items:center}
 .camRow video{width:64px;height:48px;border-radius:6px;background:#000;object-fit:cover;border:1px solid var(--line);flex:none}
+.faceView{position:relative;width:100%;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:#0B1210;border:1px solid var(--line)}
+.faceView video,.faceView canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.faceHint{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:#E4ECE9;font-size:13px;padding-inline:10px}
+#pcFaceNote{margin-top:8px}
+.scan{margin-top:10px}
+.scan .bar{display:block}
+.scan p{margin:6px 0 0}
+#pcScanT b{color:var(--ink)}
 table.agree{border-collapse:collapse;width:100%;font-size:13.5px}
 table.agree th,table.agree td{text-align:left;padding:6px;border-bottom:1px solid var(--line)}
 table.agree th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
@@ -575,8 +583,9 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
     <div class="main">
       <section class="card" aria-label="Live pulse scope">
         <div class="scopeBar">
-          <h2>Fingertip pulse</h2>
+          <h2 id="pcTitle">Fingertip pulse</h2>
           <div class="ctrls">
+            <span class="seg" id="pcMode" role="group" aria-label="Where to measure"><button type="button" data-mode="finger" aria-pressed="true">Fingertip</button><button type="button" data-mode="face" aria-pressed="false">Face</button></span>
             <button class="btn primary" id="pcCam" type="button">Start camera</button>
             <button class="btn" id="pcSim" type="button" aria-pressed="false">Simulated signal</button>
             <button class="btn" id="pcStop" type="button" disabled>Stop</button>
@@ -608,7 +617,14 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
         </div>
         <div class="card">
           <h3>Camera</h3>
-          <div class="camRow"><video id="pcVideo" playsinline muted></video><span class="note" id="pcCamNote">Rear camera with flash works best. iPhone Safari can't turn the flash on from a web page, so hold your finger toward a bright light.</span></div>
+          <div class="faceView" id="pcFaceView" hidden>
+            <video id="pcFaceVideo" playsinline muted></video>
+            <canvas id="pcFaceOverlay" aria-hidden="true"></canvas>
+            <span class="faceHint" id="pcFaceHint">Camera off</span>
+          </div>
+          <p class="note" id="pcFaceNote" hidden>Front camera, no contact. Face a window or lamp so your face is evenly lit, hold the phone steady, keep still and don't talk. Every frame is analysed on this device and never stored or sent. Heart rate only: for HRV use a fingertip reading or a chest strap.</p>
+          <div class="scan" id="pcScan" hidden><span class="bar"><i id="pcScanFill" style="width:0%"></i></span><p class="note" id="pcScanT"></p></div>
+          <div class="camRow" id="pcFingerCam"><video id="pcVideo" playsinline muted></video><span class="note" id="pcCamNote">Rear camera with flash works best. iPhone Safari can't turn the flash on from a web page, so hold your finger toward a bright light.</span></div>
         </div>
       </aside>
     </div>
@@ -621,7 +637,7 @@ pre{white-space:pre-wrap;font-size:12px;background:var(--surface-2);border:1px s
         </div>
         <table class="agree">
           <thead><tr><th>Source</th><th class="num">Heart rate</th><th class="num">Difference</th><th>Verdict</th></tr></thead>
-          <tbody id="pcAgree"><tr><td>Fingertip camera</td><td class="num mono" id="pcCamHr">--</td><td class="num">reference</td><td id="pcCamVerdict">--</td></tr></tbody>
+          <tbody id="pcAgree"><tr><td id="pcCamName">Fingertip camera</td><td class="num mono" id="pcCamHr">--</td><td class="num">reference</td><td id="pcCamVerdict">--</td></tr></tbody>
         </table>
         <p class="note" id="pcWatchNote" style="margin-top:8px"></p>
         <details class="how">

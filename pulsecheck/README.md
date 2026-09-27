@@ -7,9 +7,10 @@ A neuroscience teaching app built around a 3D body. It merges three things:
   (BodyParts3D): tap the brain, eyes, jaw, heart, lungs, fingertip or wrist and the camera flies there
   while the scope dims every channel except the ones that organ drives. The heart beats at the live heart
   rate, the lungs follow the breathing trace, and the brain glows with occipital alpha.
-- **Live pulse check**: fingertip-over-camera PPG with a transparent 5-part quality score, artifact log,
+- **Live pulse check**: fingertip-over-camera PPG, or a contactless 30-second face scan with the front camera,
+  with a transparent 5-part quality score, artifact log,
   HRV, and a live Bluetooth heart-rate connection (Garmin Broadcast Heart Rate, chest straps, Apple Watch
-  via a broadcast app). Whatever is live drives the 3D heart: watch first, then a clean camera reading,
+  via a broadcast app). Whatever is live drives the 3D heart: watch first, then a clean camera reading (fingertip or face),
   otherwise the simulator. The chip on the body map says which.
 - **My wearables**: load Apple Health, Garmin, Oura, Muse (Mind Monitor) or any tracker CSV/JSON export for
   trends against your usual range, heart rate by hour, EEG band power, and automatic insights. Each insight
@@ -21,13 +22,13 @@ A neuroscience teaching app built around a 3D body. It merges three things:
 |---|---|
 | `index.html` | the app (teaching scope UI + tabs + 3D body stage) |
 | `app-live.js` | mounts the 3D body, picks the heart-rate source, runs the live pulse tab, registers the service worker |
-| `ppg-core.js` | PPG processing and quality score (unchanged from Pulse Check) |
-| `ppg-inputs.js` | camera, accelerometer, Bluetooth heart rate, simulator (unchanged) |
+| `ppg-core.js` | PPG processing and quality score; `FACE_CONFIG` and the `POS` filter for face scans |
+| `ppg-inputs.js` | camera, face camera, accelerometer, Bluetooth heart rate, fingertip and face simulators |
 | `vendor/body3d.js` | **generated**: three.js + Plethscape anatomy + `tools/body3d/viewer.js`, one ES module |
 | `models/` | **generated**: BodyParts3D atlas, neutral skin, Draco decoder, Plethscape attribution/license |
 | `tools/build-body3d.mjs` | rebuilds `vendor/` and `models/` from Plethscape at a pinned commit |
 | `sw.js`, `manifest.webmanifest`, `icon*` | installable PWA; models are cached after the first load |
-| `test.mjs` | `node test.mjs`: heart-rate accuracy and artifact detection on synthetic signals |
+| `test.mjs` | `node test.mjs`: heart-rate accuracy and artifact detection on synthetic signals (fingertip and face) |
 
 ## Run it
 
@@ -84,6 +85,35 @@ Heart rate is shown only when fair or good; otherwise the last reliable value is
 Thresholds live in `CONFIG` at the top of `ppg-core.js`. Synthetic results (`node test.mjs`): within ~1–2 bpm
 from 45 to 180 bpm on clean signal; motion, weak contact, pressing too hard and finger-off are flagged.
 Simulated signals, not a clinical validation.
+
+## Face scan (contactless)
+
+Switch the Live pulse check tab to **Face** and press **Start face scan**. The front camera tracks the face with a
+skin-colour mask (no face-detection library, nothing downloaded), averages the forehead and both cheeks, and turns
+the colour into a pulse wave with POS (Wang et al., *IEEE TBME* 2017). That wave goes through the same
+`PPGProcessor`, configured with `FACE_CONFIG`:
+
+| Part | Face version |
+|---|---|
+| Beat shape, Pulse clarity, Rhythm | unchanged |
+| Skin signal | relative pulse amplitude in the skin, on its own scale (a face pulse is ~10x weaker than a lit fingertip); glare lowers it |
+| Head stillness | how far the tracked face moves per frame, instead of the phone's accelerometer |
+
+Extra safeguards in face mode:
+- A heart rate is shown only when the spectrum clearly agrees with the beat rhythm (`hrMinClarity`).
+- A guard catches the peak finder locking onto every second or third beat.
+- HRV is not reported: at 30 fps the beat timing reads 2–3x too high. Use a fingertip reading or a chest strap for HRV.
+
+After 30 s the tab shows a scan result (median heart rate and % good signal) while the live reading carries on.
+The simulated signal button runs a face simulator in Face mode, as a stage backup.
+
+Synthetic results (`node test.mjs`): within ~1–3 bpm from 50 to 150 bpm whenever a heart rate is shown; at
+exercise rates (120+) it mostly declines to show one. Head motion, dim light, glare and no face are flagged.
+Fingertip results are unchanged. Real faces vary with skin tone, lighting and camera processing, so tune
+`FACE_CONFIG` on real phones against a chest strap before trusting it.
+
+Blood pressure and similar estimates from a face need licensed, validated models (for example Shen.ai, available
+through Thryve's native mobile SDKs under a commercial contract); this app doesn't estimate them.
 
 ## Hooks
 
