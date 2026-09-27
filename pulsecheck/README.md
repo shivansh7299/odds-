@@ -2,11 +2,11 @@
 
 A neuroscience teaching app built around a 3D body. It merges three things:
 
-- **Body & scope**: the teaching scope (synthetic EEG at Fz/Oz, finger pleth, respiration, EDA, skin
+- **Body & scope**: the teaching scope (synthetic EEG from a Muse headband's four sensors, TP9 / AF7 / AF8 / TP10, finger pleth, respiration, EDA, skin
   temperature, events, filters, spectrum, quizzes). The body map is now the **Plethscape 3D anatomy**
   (BodyParts3D): tap the brain, eyes, jaw, heart, lungs, fingertip or wrist and the camera flies there
   while the scope dims every channel except the ones that organ drives. The heart beats at the live heart
-  rate, the lungs follow the breathing trace, and the brain glows with occipital alpha.
+  rate, the lungs follow the breathing trace, and the brain glows with alpha.
 - **Live pulse check**: fingertip-over-camera PPG, or a contactless 30-second face scan with the front camera,
   with a transparent 5-part quality score, artifact log,
   HRV, and a live Bluetooth heart-rate connection (Garmin Broadcast Heart Rate, chest straps, Apple Watch
@@ -31,6 +31,28 @@ A neuroscience teaching app built around a 3D body. It merges three things:
 | `tools/build-body3d.mjs` | rebuilds `vendor/` and `models/` from Plethscape at a pinned commit |
 | `sw.js`, `manifest.webmanifest`, `icon*` | installable PWA; models are cached after the first load |
 | `test.mjs` | `node test.mjs`: heart-rate accuracy and artifact detection on synthetic signals (fingertip and face) |
+
+## Muse montage, headband and "reading the scope"
+
+The Body & scope simulator uses the Muse headband's layout instead of lab positions: **AF7/AF8** on the forehead and
+**TP9/TP10** behind the ears, each measured against the reference at **Fpz** (centre of the forehead). The model follows
+what those sites really pick up:
+
+- AF7/AF8: every blink (both move the same way), sideways eye movements (**Look sideways**: they swing in opposite
+  directions) and frontal theta.
+- TP9/TP10: alpha when the eyes close (weaker than at the back of the head, where Muse has no sensor) and heavy
+  jaw-muscle noise, since the temporalis sits right under them. Blinks appear small and upside-down here, because the
+  forehead reference sees the blink too.
+- **Loose TP9 contact** mimics the most common Muse problem: hair or a glasses arm lifting the pad behind the ear.
+
+The 3D body shows a Muse headband fitted to the head (added in `tools/body3d/viewer.js`: rays from outside find the
+skin, the band sits just above it). It appears when you zoom to the brain, eyes or jaw, or turn on **Show wearables**,
+and each electrode pad glows with its channel's live activity (`state().muse`). Rebuild with
+`node tools/build-body3d.mjs` after changing the viewer.
+
+Under the scope, **On screen now** narrates what's visible in plain words (a blink, jaw noise, alpha with eyes closed,
+a skin-conductance rise, smaller pulses from vasoconstriction), and **About this trace** explains any trace you tap:
+what it is, where it's measured, its units and what to look for.
 
 ## Run it
 

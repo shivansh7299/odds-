@@ -47,6 +47,7 @@ async function mount3D() {
       hr: driver().hr,
       breath: BIO.resp != null ? clamp(BIO.resp / 2.8, 0, 1) : null,
       brain: BIO.alpha != null ? clamp((BIO.alpha - 6) / 30, 0, 1) : 0,
+      muse: BIO.museAct,              // Muse headband pads glow with each channel's activity
     }),
     onPick: (organ) => BIO.selectOrgan?.(organ),
     onStatus: (s) => {
