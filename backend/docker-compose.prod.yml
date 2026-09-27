@@ -1,0 +1,55 @@
+# Production-like stack: Postgres + one-off migrations + web + worker.
+#   BETTER_AUTH_URL=https://your.domain docker compose -f docker-compose.prod.yml up -d --build
+# Put a TLS-terminating proxy (Caddy, Traefik, or your platform's) in front of `web`.
+x-app: &app
+  build:
+    context: .
+    args:
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+  image: vitalsync:latest
+  env_file: .env.production
+  environment:
+    DATABASE_URL: postgresql://vitalsync:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/vitalsync
+    UPLOAD_DIR: /data/uploads
+  volumes:
+    - uploads:/data/uploads # shared: web writes uploads, worker imports them
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vitalsync
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: vitalsync
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vitalsync"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    <<: *app
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    <<: *app
+    ports: ["3000:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    <<: *app
+    command: ["node_modules/.bin/tsx", "--conditions=react-server", "worker/index.ts"]
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
+  uploads:

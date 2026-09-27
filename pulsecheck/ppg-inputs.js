@@ -255,11 +255,29 @@ export async function startMotion(onSample) {
 }
 
 // ---------------- Bluetooth heart rate (standard GATT Heart Rate Service) ----------------
+// Devices that advertise the standard Heart Rate service (straps, most watches), plus watches that
+// advertise only their name while broadcasting (many Garmins leave the service UUID out of the
+// advertisement; the service is still there once connected).
+const HR_NAME_PREFIXES = ["Forerunner", "FR", "Garmin", "fenix", "f\u0113nix", "epix", "Venu", "vivoactive", "Instinct", "Enduro", "MARQ", "Descent", "Approach"];
+
 export async function connectHeartRate(onBpm) {
   if (!navigator.bluetooth) throw new Error("Web Bluetooth isn't available in this browser. Use Chrome or Edge on a laptop or Android.");
-  const device = await navigator.bluetooth.requestDevice({ filters: [{ services: ["heart_rate"] }] });
+  // An empty device list usually means the browser can't use Bluetooth at all; say so instead.
+  if (navigator.bluetooth.getAvailability && !(await navigator.bluetooth.getAvailability().catch(() => true))) {
+    throw new Error("Bluetooth is off, or this browser isn't allowed to use it. On a Mac: System Settings → Privacy & Security → Bluetooth → turn on Google Chrome (or Edge), then restart the browser.");
+  }
+  const device = await navigator.bluetooth.requestDevice({
+    filters: [{ services: ["heart_rate"] }, ...HR_NAME_PREFIXES.map((namePrefix) => ({ namePrefix }))],
+    optionalServices: ["heart_rate"],
+  });
   const server = await device.gatt.connect();
-  const ch = await (await server.getPrimaryService("heart_rate")).getCharacteristic("heart_rate_measurement");
+  let service;
+  try { service = await server.getPrimaryService("heart_rate"); }
+  catch {
+    device.gatt.disconnect();
+    throw new Error(`${device.name || "That device"} isn't broadcasting heart rate. On a Garmin: heart-rate glance → menu → Broadcast Heart Rate, keep that screen open, then connect again.`);
+  }
+  const ch = await service.getCharacteristic("heart_rate_measurement");
   ch.addEventListener("characteristicvaluechanged", (e) => {
     const v = e.target.value, flags = v.getUint8(0);
     const wide = flags & 0x01;

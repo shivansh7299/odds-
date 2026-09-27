@@ -24,6 +24,7 @@ const nowS = () => performance.now() / 1000;
 function driver() {
   const t = nowS();
   if (LIVE.watch && t - LIVE.watch.t < 5) return { hr: LIVE.watch.bpm, label: LIVE.watch.name, live: true };
+  const ext = BIO.externalHr?.(); if (ext) return ext;   // VitalSync server (vitalsync.js), when connected
   if (LIVE.cam && t - LIVE.cam.t < 5) return { hr: LIVE.cam.bpm, label: LIVE.cam.label, live: true };
   return { hr: BIO.hrBpm, label: "the simulator", live: false };
 }

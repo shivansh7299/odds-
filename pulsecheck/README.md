@@ -31,6 +31,7 @@ A neuroscience teaching app built around a 3D body. It merges three things:
 | `resp-core.js` | breathing rate from the camera signals, and the HRV calm/stressed reading |
 | `gemini-wear.js` | live Gemini analysis card on the *My wearables* tab (bring-your-own API key) |
 | `pcg-core.js` | heart sounds from the microphone: processing, quality score, heart-to-fingertip timing, simulator |
+| `vitalsync.js` | connects to the VitalSync backend (`../backend`): loads your watch data into *My wearables*, and live heart rate into the 3D heart |
 | `vendor/body3d.js` | **generated**: three.js + Plethscape anatomy + `tools/body3d/viewer.js`, one ES module |
 | `models/` | **generated**: BodyParts3D atlas, neutral skin, Draco decoder, Plethscape attribution/license |
 | `tools/build-body3d.mjs` | rebuilds `vendor/` and `models/` from Plethscape at a pinned commit |
@@ -222,6 +223,24 @@ Gemini API and re-runs by itself when the data changes (new file, example on/off
 "Ask Claude" boxes appear only when the page runs as a Claude artifact; on your own hosting they stay hidden.
 To use another model, send the "Copy summary for AI" JSON with a prompt like: *"Explain this fingertip PPG
 session to a non-expert in 4 sentences. Say which readings to trust and why. Do not diagnose."*
+
+## VitalSync backend (Garmin watch data)
+
+`../backend` is a Next.js + PostgreSQL server that collects Forerunner 265 data (a Connect IQ watch app,
+Bluetooth broadcast, and FIT/Garmin-export import) and serves it read-only. `vitalsync.js` adds a
+**VitalSync** entry to the device list on the *My wearables* tab:
+
+- **Load my data** fetches `/api/v1/export` and hands it to the existing importer as `vitalsync.json`,
+  exactly like dropping a file, so the KPIs, insights, charts and Gemini card work unchanged.
+- **Live heart rate** polls `/api/v1/live` every 5 s. `app-live.js` asks `BIO.externalHr()` after a
+  directly connected Bluetooth watch and before the camera, so the 3D heart and the source chip show
+  *VitalSync (watch app)* while fresh data (≤ 30 s old) is arriving.
+- The server address and a read-only API key (VitalSync → Settings → API keys) stay in this browser's
+  `localStorage`, like the Gemini key. `sw.js` never caches requests that carry an API key.
+
+The backend must be reachable over https from wherever the site runs (GitHub Pages needs https; use
+the backend's ngrok address in development) and must list the site's origin in `VITALSYNC_CORS_ORIGINS`.
+Setup: `../backend/README.md`.
 
 ## Credits and licenses
 

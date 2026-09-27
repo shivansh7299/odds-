@@ -1,0 +1,4 @@
+src/generated
+pnpm-lock.yaml
+.next
+src/components/ui

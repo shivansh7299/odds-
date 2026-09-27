@@ -1,0 +1,73 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vitalsync
+          POSTGRES_PASSWORD: vitalsync
+          POSTGRES_DB: vitalsync
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vitalsync" --health-interval 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://vitalsync:vitalsync@localhost:5432/vitalsync
+      TEST_DATABASE_URL: postgresql://vitalsync:vitalsync@localhost:5432/vitalsync_test
+      BETTER_AUTH_URL: http://localhost:3000
+      ENABLE_MOCK_SOURCE: "true"
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: backend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Generate CI-only secrets
+        run: |
+          echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "TOKEN_ENC_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Create test database and migrate
+        run: |
+          PGPASSWORD=vitalsync psql -h localhost -U vitalsync -d vitalsync -c "CREATE DATABASE vitalsync_test"
+          pnpm db:deploy
+      - run: pnpm test:integration
+
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          CI: "true"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: backend/playwright-report
