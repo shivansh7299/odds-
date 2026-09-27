@@ -24,6 +24,7 @@ A neuroscience teaching app built around a 3D body. It merges three things:
 | `app-live.js` | mounts the 3D body, picks the heart-rate source, runs the live pulse tab, registers the service worker |
 | `ppg-core.js` | PPG processing and quality score; `FACE_CONFIG` and the `POS` filter for face scans |
 | `ppg-inputs.js` | camera, face camera, accelerometer, Bluetooth heart rate, fingertip and face simulators |
+| `gemini-wear.js` | live Gemini analysis card on the *My wearables* tab (bring-your-own API key) |
 | `vendor/body3d.js` | **generated**: three.js + Plethscape anatomy + `tools/body3d/viewer.js`, one ES module |
 | `models/` | **generated**: BodyParts3D atlas, neutral skin, Draco decoder, Plethscape attribution/license |
 | `tools/build-body3d.mjs` | rebuilds `vendor/` and `models/` from Plethscape at a pinned commit |
@@ -122,6 +123,21 @@ window.addEventListener("ppg:update",   (e) => e.detail.hr);          // every c
 window.addEventListener("ppg:artifact", (e) => e.detail.reason);      // start of an artifact episode
 window.BIO.body.focus("brain");                                        // fly the 3D camera to an organ
 ```
+
+## Gemini analysis (My wearables tab)
+
+The *AI analysis · Gemini* card under Insights streams a short analysis of the loaded wearable data from the
+Gemini API and re-runs by itself when the data changes (new file, example on/off, clear). How it works:
+
+- `renderWear()` in `index.html` fires `wear:update`; `gemini-wear.js` listens, but only acts while the
+  *My wearables* tab is open, waits 800 ms, and skips the call if the data summary hasn't changed.
+- It sends `BIO.wear.digest()`, the same numeric summary "Ask Claude" uses (daily values, hourly heart rate,
+  EEG band power), never the raw files, to `streamGenerateContent?alt=sse`.
+- The site is static, so there is no server to hide a key. Each person pastes their own key from
+  [Google AI Studio](https://aistudio.google.com/apikey); it stays in that browser's `localStorage`
+  ("Forget key" removes it). Restrict the key to this site under *Website restrictions* in Google Cloud.
+- Model defaults to `gemini-2.5-flash` and can be changed in the card. To use one shared key instead, put a
+  small proxy (Cloudflare Worker, Vercel function) in front of the API and point `API` in `gemini-wear.js` at it.
 
 "Ask Claude" boxes appear only when the page runs as a Claude artifact; on your own hosting they stay hidden.
 To use another model, send the "Copy summary for AI" JSON with a prompt like: *"Explain this fingertip PPG
